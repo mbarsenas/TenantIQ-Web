@@ -28,10 +28,30 @@ function verifyStripeSignature(payload: string, header: string, secret: string) 
   });
 }
 
+async function stripeRequest(path: string, secretKey: string, params?: URLSearchParams) {
+  const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method: params ? 'POST' : 'GET',
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    },
+    body: params?.toString(),
+    cache: 'no-store',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || `Stripe API request failed (${response.status}).`);
+  return data;
+}
+
+function maxTenantsForEdition(edition: string | null) {
+  return edition === 'Professional' ? '5' : edition === 'Essentials' ? '1' : '0';
+}
+
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  if (!webhookSecret) {
-    console.error('[TenantIQ webhook] STRIPE_WEBHOOK_SECRET is not configured.');
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!webhookSecret || !secretKey) {
+    console.error('[TenantIQ webhook] Stripe secrets are not configured.');
     return NextResponse.json({ error: 'Webhook is not configured.' }, { status: 503 });
   }
 
@@ -52,30 +72,67 @@ export async function POST(request: Request) {
   }
 
   if (event.type === 'checkout.session.completed') {
-    const session = event.data?.object ?? {};
-    const fulfillment = {
-      eventId: event.id,
-      eventType: event.type,
-      livemode: Boolean(event.livemode),
-      checkoutSessionId: session.id ?? null,
-      customerId: typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null,
-      subscriptionId: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null,
-      customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
-      paymentStatus: session.payment_status ?? null,
-      status: session.status ?? null,
-      product: session.metadata?.product ?? null,
-      edition: session.metadata?.edition ?? null,
-      environment: session.metadata?.environment ?? null,
-      amountTotal: session.amount_total ?? null,
-      currency: session.currency ?? null,
-      receivedAt: new Date().toISOString(),
-    };
+    try {
+      const session = event.data?.object ?? {};
+      const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null;
+      const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
+      const edition = session.metadata?.edition ?? null;
+      const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+      const maxTenants = maxTenantsForEdition(edition);
 
-    // GoDaddy's application filesystem is not a durable fulfillment database.
-    // Log the verified record for sandbox validation. The next stage will persist
-    // this object in a durable store before production license issuance is enabled.
-    console.log('[TenantIQ fulfillment]', JSON.stringify(fulfillment));
+      if (!subscriptionId || !customerId || session.payment_status !== 'paid') {
+        console.warn('[TenantIQ fulfillment] Checkout completed without paid subscription/customer identifiers.', session.id);
+        return NextResponse.json({ received: true, fulfillment: 'skipped' });
+      }
+
+      const subscription = await stripeRequest(`subscriptions/${subscriptionId}`, secretKey);
+      const previousEventId = subscription?.metadata?.tenantiq_fulfillment_event_id;
+      if (previousEventId === event.id) {
+        return NextResponse.json({ received: true, fulfillment: 'already_recorded' });
+      }
+
+      const subscriptionParams = new URLSearchParams();
+      subscriptionParams.set('metadata[tenantiq_product]', 'TenantIQ');
+      subscriptionParams.set('metadata[tenantiq_edition]', edition || 'Unknown');
+      subscriptionParams.set('metadata[tenantiq_max_tenants]', maxTenants);
+      subscriptionParams.set('metadata[tenantiq_fulfillment_status]', 'pending_license');
+      subscriptionParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
+      subscriptionParams.set('metadata[tenantiq_checkout_session_id]', session.id || '');
+      subscriptionParams.set('metadata[tenantiq_customer_email]', customerEmail || '');
+      subscriptionParams.set('metadata[tenantiq_payment_status]', session.payment_status || '');
+      subscriptionParams.set('metadata[tenantiq_fulfillment_recorded_at]', new Date().toISOString());
+      await stripeRequest(`subscriptions/${subscriptionId}`, secretKey, subscriptionParams);
+
+      const customerParams = new URLSearchParams();
+      customerParams.set('metadata[tenantiq_customer]', 'true');
+      customerParams.set('metadata[tenantiq_latest_edition]', edition || 'Unknown');
+      customerParams.set('metadata[tenantiq_latest_subscription_id]', subscriptionId);
+      customerParams.set('metadata[tenantiq_fulfillment_status]', 'pending_license');
+      customerParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
+      if (customerEmail) customerParams.set('metadata[tenantiq_email]', customerEmail);
+      await stripeRequest(`customers/${customerId}`, secretKey, customerParams);
+
+      const fulfillment = {
+        eventId: event.id,
+        checkoutSessionId: session.id ?? null,
+        customerId,
+        subscriptionId,
+        customerEmail,
+        edition,
+        maxTenants: Number(maxTenants),
+        paymentStatus: session.payment_status ?? null,
+        amountTotal: session.amount_total ?? null,
+        currency: session.currency ?? null,
+        fulfillmentStatus: 'pending_license',
+      };
+      console.log('[TenantIQ fulfillment persisted]', JSON.stringify(fulfillment));
+      return NextResponse.json({ received: true, fulfillment: 'recorded' });
+    } catch (error) {
+      console.error('[TenantIQ fulfillment] Persistence failed:', error);
+      // Non-2xx makes Stripe retry the verified event, preserving at-least-once delivery.
+      return NextResponse.json({ error: 'Fulfillment persistence failed.' }, { status: 500 });
+    }
   }
 
-  return NextResponse.json({ received: true });
+  return NextResponse.json({ received: true, fulfillment: 'not_applicable' });
 }

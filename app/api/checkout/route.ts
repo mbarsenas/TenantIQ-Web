@@ -54,6 +54,20 @@ export async function POST(request: Request) {
     params.set('cancel_url', `${origin}/pricing/cancel`);
     params.set('allow_promotion_codes', 'true');
     params.set('billing_address_collection', 'auto');
+
+    // Fulfillment requires the Microsoft 365 tenant domain before a signed license can be issued.
+    params.set('custom_fields[0][key]', 'tenantdomain');
+    params.set('custom_fields[0][label][type]', 'custom');
+    params.set('custom_fields[0][label][custom]', 'Microsoft 365 primary domain');
+    params.set('custom_fields[0][type]', 'text');
+    params.set('custom_fields[0][optional]', 'false');
+    params.set('custom_fields[0][text][minimum_length]', '4');
+    params.set('custom_fields[0][text][maximum_length]', '253');
+    params.set(
+      'custom_text[submit][message]',
+      'Enter the primary Microsoft 365 domain that TenantIQ will be licensed to, for example contoso.com.',
+    );
+
     params.set('subscription_data[metadata][product]', 'TenantIQ');
     params.set('subscription_data[metadata][edition]', edition);
     params.set('metadata[product]', 'TenantIQ');

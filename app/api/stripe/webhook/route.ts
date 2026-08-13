@@ -96,6 +96,7 @@ export async function POST(request: Request) {
       subscriptionParams.set('metadata[tenantiq_edition]', edition || 'Unknown');
       subscriptionParams.set('metadata[tenantiq_max_tenants]', maxTenants);
       subscriptionParams.set('metadata[tenantiq_fulfillment_status]', 'pending_license');
+      subscriptionParams.set('metadata[tenantiq_delivery_email_status]', 'pending');
       subscriptionParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
       subscriptionParams.set('metadata[tenantiq_checkout_session_id]', session.id || '');
       subscriptionParams.set('metadata[tenantiq_customer_email]', customerEmail || '');
@@ -124,6 +125,7 @@ export async function POST(request: Request) {
         amountTotal: session.amount_total ?? null,
         currency: session.currency ?? null,
         fulfillmentStatus: 'pending_license',
+        deliveryEmailStatus: 'pending',
       };
       console.log('[TenantIQ fulfillment persisted]', JSON.stringify(fulfillment));
       return NextResponse.json({ received: true, fulfillment: 'recorded' });

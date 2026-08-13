@@ -9,6 +9,24 @@ const PRICE_IDS = {
 
 type Edition = keyof typeof PRICE_IDS;
 
+function getPublicOrigin(request: Request) {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) return configured.replace(/\/$/, '');
+
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https';
+  if (forwardedHost && !forwardedHost.startsWith('localhost') && !forwardedHost.startsWith('127.0.0.1')) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const host = request.headers.get('host')?.trim();
+  if (host && !host.startsWith('localhost') && !host.startsWith('127.0.0.1')) {
+    return `https://${host}`;
+  }
+
+  return 'https://tenantiq365.com';
+}
+
 export async function POST(request: Request) {
   try {
     const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -27,7 +45,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid TenantIQ edition.' }, { status: 400 });
     }
 
-    const origin = new URL(request.url).origin;
+    const origin = getPublicOrigin(request);
     const params = new URLSearchParams();
     params.set('mode', 'subscription');
     params.set('line_items[0][price]', price);

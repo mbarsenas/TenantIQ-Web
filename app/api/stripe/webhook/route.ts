@@ -5,6 +5,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const TOLERANCE_SECONDS = 300;
+const DOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)+$/;
 
 function verifyStripeSignature(payload: string, header: string, secret: string) {
   const parts = header.split(',').map((part) => part.trim());
@@ -47,6 +48,62 @@ function maxTenantsForEdition(edition: string | null) {
   return edition === 'Professional' ? '5' : edition === 'Essentials' ? '1' : '0';
 }
 
+function getCheckoutTextField(session: any, key: string) {
+  const fields = Array.isArray(session?.custom_fields) ? session.custom_fields : [];
+  const field = fields.find((candidate: any) => candidate?.key === key);
+  return typeof field?.text?.value === 'string' ? field.text.value.trim() : '';
+}
+
+function normalizeCustomerDomain(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/\.$/, '');
+  if (!normalized || normalized.includes('://') || normalized.includes('/') || normalized.includes('@')) return null;
+  return DOMAIN_PATTERN.test(normalized) ? normalized : null;
+}
+
+async function dispatchFulfillment(subscriptionId: string) {
+  const token = process.env.TENANTIQ_GITHUB_FULFILLMENT_TOKEN?.trim();
+  if (!token) throw new Error('TENANTIQ_GITHUB_FULFILLMENT_TOKEN is not configured.');
+
+  const repository = process.env.TENANTIQ_FULFILLMENT_REPOSITORY?.trim() || 'mbarsenas/TenantIQ';
+  const workflow = process.env.TENANTIQ_FULFILLMENT_WORKFLOW?.trim() || 'fulfill-order.yml';
+  const ref = process.env.TENANTIQ_FULFILLMENT_REF?.trim() || 'main';
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    throw new Error('TENANTIQ_FULFILLMENT_REPOSITORY is invalid.');
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2026-03-10',
+        'User-Agent': 'TenantIQ-Fulfillment',
+      },
+      body: JSON.stringify({
+        ref,
+        inputs: { subscription_id: subscriptionId },
+      }),
+      cache: 'no-store',
+    },
+  );
+
+  if (response.status !== 204) {
+    const body = await response.text();
+    throw new Error(`GitHub fulfillment dispatch failed (${response.status}): ${body.slice(0, 500)}`);
+  }
+}
+
+function metadataParams(values: Record<string, string>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    params.set(`metadata[${key}]`, value);
+  }
+  return params;
+}
+
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
@@ -78,6 +135,7 @@ export async function POST(request: Request) {
       const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
       const edition = session.metadata?.edition ?? null;
       const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+      const customerDomain = normalizeCustomerDomain(getCheckoutTextField(session, 'tenantdomain'));
       const maxTenants = maxTenantsForEdition(edition);
 
       if (!subscriptionId || !customerId || session.payment_status !== 'paid') {
@@ -86,32 +144,74 @@ export async function POST(request: Request) {
       }
 
       const subscription = await stripeRequest(`subscriptions/${subscriptionId}`, secretKey);
-      const previousEventId = subscription?.metadata?.tenantiq_fulfillment_event_id;
-      if (previousEventId === event.id) {
-        return NextResponse.json({ received: true, fulfillment: 'already_recorded' });
+      const existingMetadata = subscription?.metadata ?? {};
+      const previousEventId = existingMetadata.tenantiq_fulfillment_event_id;
+      const automationStatus = existingMetadata.tenantiq_automation_status;
+
+      if (previousEventId === event.id && automationStatus === 'dispatched') {
+        return NextResponse.json({ received: true, fulfillment: 'already_dispatched' });
       }
 
-      const subscriptionParams = new URLSearchParams();
-      subscriptionParams.set('metadata[tenantiq_product]', 'TenantIQ');
-      subscriptionParams.set('metadata[tenantiq_edition]', edition || 'Unknown');
-      subscriptionParams.set('metadata[tenantiq_max_tenants]', maxTenants);
-      subscriptionParams.set('metadata[tenantiq_fulfillment_status]', 'pending_license');
-      subscriptionParams.set('metadata[tenantiq_delivery_email_status]', 'pending');
-      subscriptionParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
-      subscriptionParams.set('metadata[tenantiq_checkout_session_id]', session.id || '');
-      subscriptionParams.set('metadata[tenantiq_customer_email]', customerEmail || '');
-      subscriptionParams.set('metadata[tenantiq_payment_status]', session.payment_status || '');
-      subscriptionParams.set('metadata[tenantiq_fulfillment_recorded_at]', new Date().toISOString());
-      await stripeRequest(`subscriptions/${subscriptionId}`, secretKey, subscriptionParams);
+      if (previousEventId !== event.id) {
+        const now = new Date().toISOString();
+        const subscriptionParams = new URLSearchParams();
+        subscriptionParams.set('metadata[tenantiq_product]', 'TenantIQ');
+        subscriptionParams.set('metadata[tenantiq_edition]', edition || 'Unknown');
+        subscriptionParams.set('metadata[tenantiq_max_tenants]', maxTenants);
+        subscriptionParams.set('metadata[tenantiq_fulfillment_status]', customerDomain ? 'pending_license' : 'requires_domain_review');
+        subscriptionParams.set('metadata[tenantiq_delivery_email_status]', 'pending');
+        subscriptionParams.set('metadata[tenantiq_automation_status]', customerDomain ? 'pending_dispatch' : 'requires_domain_review');
+        subscriptionParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
+        subscriptionParams.set('metadata[tenantiq_checkout_session_id]', session.id || '');
+        subscriptionParams.set('metadata[tenantiq_customer_email]', customerEmail || '');
+        subscriptionParams.set('metadata[tenantiq_customer_domain]', customerDomain || '');
+        subscriptionParams.set('metadata[tenantiq_payment_status]', session.payment_status || '');
+        subscriptionParams.set('metadata[tenantiq_fulfillment_recorded_at]', now);
+        await stripeRequest(`subscriptions/${subscriptionId}`, secretKey, subscriptionParams);
 
-      const customerParams = new URLSearchParams();
-      customerParams.set('metadata[tenantiq_customer]', 'true');
-      customerParams.set('metadata[tenantiq_latest_edition]', edition || 'Unknown');
-      customerParams.set('metadata[tenantiq_latest_subscription_id]', subscriptionId);
-      customerParams.set('metadata[tenantiq_fulfillment_status]', 'pending_license');
-      customerParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
-      if (customerEmail) customerParams.set('metadata[tenantiq_email]', customerEmail);
-      await stripeRequest(`customers/${customerId}`, secretKey, customerParams);
+        const customerParams = new URLSearchParams();
+        customerParams.set('metadata[tenantiq_customer]', 'true');
+        customerParams.set('metadata[tenantiq_latest_edition]', edition || 'Unknown');
+        customerParams.set('metadata[tenantiq_latest_subscription_id]', subscriptionId);
+        customerParams.set('metadata[tenantiq_fulfillment_status]', customerDomain ? 'pending_license' : 'requires_domain_review');
+        customerParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
+        if (customerEmail) customerParams.set('metadata[tenantiq_email]', customerEmail);
+        if (customerDomain) customerParams.set('metadata[tenantiq_customer_domain]', customerDomain);
+        await stripeRequest(`customers/${customerId}`, secretKey, customerParams);
+      }
+
+      if (!customerDomain && previousEventId !== event.id) {
+        console.error('[TenantIQ fulfillment] Paid checkout did not contain a valid Microsoft 365 domain.', session.id);
+        return NextResponse.json({ received: true, fulfillment: 'requires_domain_review' });
+      }
+
+      const domainForDispatch = customerDomain || normalizeCustomerDomain(String(existingMetadata.tenantiq_customer_domain || ''));
+      if (!domainForDispatch) {
+        return NextResponse.json({ received: true, fulfillment: 'requires_domain_review' });
+      }
+
+      try {
+        await dispatchFulfillment(subscriptionId);
+      } catch (error) {
+        await stripeRequest(
+          `subscriptions/${subscriptionId}`,
+          secretKey,
+          metadataParams({
+            tenantiq_automation_status: 'dispatch_failed',
+            tenantiq_automation_failed_at: new Date().toISOString(),
+          }),
+        );
+        throw error;
+      }
+
+      await stripeRequest(
+        `subscriptions/${subscriptionId}`,
+        secretKey,
+        metadataParams({
+          tenantiq_automation_status: 'dispatched',
+          tenantiq_automation_dispatched_at: new Date().toISOString(),
+        }),
+      );
 
       const fulfillment = {
         eventId: event.id,
@@ -119,20 +219,23 @@ export async function POST(request: Request) {
         customerId,
         subscriptionId,
         customerEmail,
+        customerDomain: domainForDispatch,
         edition,
         maxTenants: Number(maxTenants),
         paymentStatus: session.payment_status ?? null,
         amountTotal: session.amount_total ?? null,
         currency: session.currency ?? null,
         fulfillmentStatus: 'pending_license',
+        automationStatus: 'dispatched',
         deliveryEmailStatus: 'pending',
       };
-      console.log('[TenantIQ fulfillment persisted]', JSON.stringify(fulfillment));
-      return NextResponse.json({ received: true, fulfillment: 'recorded' });
+      console.log('[TenantIQ fulfillment dispatched]', JSON.stringify(fulfillment));
+      return NextResponse.json({ received: true, fulfillment: 'dispatched' });
     } catch (error) {
-      console.error('[TenantIQ fulfillment] Persistence failed:', error);
-      // Non-2xx makes Stripe retry the verified event, preserving at-least-once delivery.
-      return NextResponse.json({ error: 'Fulfillment persistence failed.' }, { status: 500 });
+      console.error('[TenantIQ fulfillment] Automation failed:', error);
+      // Non-2xx makes Stripe retry the verified event. A duplicate dispatch is safe because
+      // the fulfillment workflow serializes by subscription and exits when email is already sent.
+      return NextResponse.json({ error: 'Fulfillment automation failed.' }, { status: 500 });
     }
   }
 

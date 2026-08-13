@@ -30,6 +30,12 @@ TENANTIQ_DELIVERY_FROM_EMAIL=TenantIQ <licenses@tenantiq365.com>
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 TENANTIQ_FULFILLMENT_API_KEY=
+TENANTIQ_GITHUB_FULFILLMENT_TOKEN=
+
+# Optional GitHub fulfillment overrides
+TENANTIQ_FULFILLMENT_REPOSITORY=mbarsenas/TenantIQ
+TENANTIQ_FULFILLMENT_WORKFLOW=fulfill-order.yml
+TENANTIQ_FULFILLMENT_REF=main
 
 TENANTIQ_R2_ACCOUNT_ID=
 TENANTIQ_R2_ACCESS_KEY_ID=
@@ -40,6 +46,25 @@ TENANTIQ_R2_BUCKET=tenantiq-deliveries
 `RESEND_API_KEY` is used for transactional mail. `TENANTIQ_DELIVERY_FROM_EMAIL` must use a sender address on a domain verified in Resend before production delivery.
 
 `TENANTIQ_FULFILLMENT_API_KEY` is a separate high-entropy bearer secret used only by the trusted TenantIQ fulfillment worker when a licensed package has finished publishing to private R2 storage.
+
+`TENANTIQ_GITHUB_FULFILLMENT_TOKEN` is used only by the verified Stripe webhook to dispatch the fulfillment workflow in `mbarsenas/TenantIQ`. Use a fine-grained GitHub token limited to that repository with **Actions: write** permission. Do not expose the token to browser/client code.
+
+## Automated purchase fulfillment
+
+Stripe Checkout collects the Microsoft 365 primary domain that will be licensed. After a paid `checkout.session.completed` webhook is verified, TenantIQ stores the order/domain metadata and dispatches the fulfillment workflow in the TenantIQ repository.
+
+```text
+Stripe Checkout
+  -> verified TenantIQ webhook
+  -> GitHub Actions fulfillment worker
+  -> signed customer license
+  -> validated customer ZIP
+  -> private Cloudflare R2
+  -> secure TenantIQ claim URL
+  -> Resend delivery email
+```
+
+The webhook records automation state in Stripe metadata. Invalid or missing customer domains are placed in `requires_domain_review` rather than issuing a license.
 
 ## Automated delivery email
 

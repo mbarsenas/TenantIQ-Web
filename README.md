@@ -31,6 +31,11 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 TENANTIQ_FULFILLMENT_API_KEY=
 
+TENANTIQ_GITHUB_TOKEN=
+TENANTIQ_FULFILLMENT_REPOSITORY=mbarsenas/TenantIQ
+TENANTIQ_FULFILLMENT_WORKFLOW=fulfill-order.yml
+TENANTIQ_FULFILLMENT_REF=main
+
 TENANTIQ_R2_ACCOUNT_ID=
 TENANTIQ_R2_ACCESS_KEY_ID=
 TENANTIQ_R2_SECRET_ACCESS_KEY=
@@ -40,6 +45,22 @@ TENANTIQ_R2_BUCKET=tenantiq-deliveries
 `RESEND_API_KEY` is used for transactional mail. `TENANTIQ_DELIVERY_FROM_EMAIL` must use a sender address on a domain verified in Resend before production delivery.
 
 `TENANTIQ_FULFILLMENT_API_KEY` is a separate high-entropy bearer secret used only by the trusted TenantIQ fulfillment worker when a licensed package has finished publishing to private R2 storage.
+
+`TENANTIQ_GITHUB_TOKEN` is used only by the verified Stripe webhook to dispatch the `TenantIQ Order Fulfillment` GitHub Actions workflow after a paid Checkout Session completes. Use a fine-grained GitHub token scoped to `mbarsenas/TenantIQ` with Actions read/write access and store it only in the deployed TenantIQ-Web environment.
+
+## Automated order fulfillment
+
+After Stripe sends a verified `checkout.session.completed` event for a paid TenantIQ subscription, the webhook records the order in Stripe metadata and dispatches:
+
+```text
+Repository: mbarsenas/TenantIQ
+Workflow:   .github/workflows/fulfill-order.yml
+Input:      subscription_id=sub_...
+```
+
+The webhook tracks the dispatch state in Stripe metadata as `pending` then `dispatched`. A Stripe retry for the same event will retry a handoff that did not reach the dispatched state without resetting an already-progressing fulfillment record.
+
+The GitHub Actions worker then generates the signed license, builds the customer package, publishes it to private Cloudflare R2, rotates/generates the secure claim URL, and calls the delivery-email endpoint.
 
 ## Automated delivery email
 

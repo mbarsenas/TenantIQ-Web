@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
-import { sendTenantIQDeliveryEmail } from '../../../../lib/graph-mail';
+import { sendTenantIQDeliveryEmail } from '../../../../lib/resend-mail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -141,13 +141,15 @@ export async function POST(request: Request) {
       }),
     );
 
+    let resendEmailId: string;
     try {
-      await sendTenantIQDeliveryEmail({
+      resendEmailId = await sendTenantIQDeliveryEmail({
         to: email,
         edition,
         licenseId,
         claimUrl,
         claimExpiresAt,
+        idempotencyKey: `tenantiq-delivery-${subscriptionId}-${licenseId}`,
       });
     } catch (error) {
       await stripePost(
@@ -167,11 +169,13 @@ export async function POST(request: Request) {
       metadataParams({
         tenantiq_delivery_email_status: 'sent',
         tenantiq_delivery_email_sent_at: new Date().toISOString(),
+        tenantiq_delivery_email_provider: 'resend',
+        tenantiq_delivery_email_id: resendEmailId,
       }),
     );
 
-    console.log('[TenantIQ delivery email] Sent', { subscriptionId, licenseId });
-    return NextResponse.json({ sent: true, status: 'sent' });
+    console.log('[TenantIQ delivery email] Sent with Resend', { subscriptionId, licenseId, resendEmailId });
+    return NextResponse.json({ sent: true, status: 'sent', emailId: resendEmailId });
   } catch (error) {
     console.error('[TenantIQ delivery email] Failed:', error);
     return NextResponse.json({ error: 'Unable to send TenantIQ delivery email.' }, { status: 502 });

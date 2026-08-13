@@ -4,11 +4,16 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const SAS_VERSION = '2023-11-03';
 const DOWNLOAD_MINUTES = 10;
+const R2_REGION = 'auto';
+const R2_SERVICE = 's3';
 
 function sha256(value: string) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function hmac(key: Buffer | string, value: string) {
+  return createHmac('sha256', key).update(value, 'utf8').digest();
 }
 
 function maskEmail(email: string | null | undefined) {
@@ -18,70 +23,78 @@ function maskEmail(email: string | null | undefined) {
   return `${visible}${'*'.repeat(Math.max(2, local.length - visible.length))}@${domain}`;
 }
 
-function isoSeconds(date: Date) {
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+function awsEncode(value: string) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
-function safeDownloadName(blobName: string) {
-  const raw = blobName.split('/').pop() || 'TenantIQ.zip';
-  return raw.replace(/[\r\n"\\]/g, '-');
+function canonicalObjectPath(bucket: string, objectKey: string) {
+  const encodedBucket = awsEncode(bucket);
+  const encodedKey = objectKey.split('/').map(awsEncode).join('/');
+  return `/${encodedBucket}/${encodedKey}`;
 }
 
-function createBlobReadSas(account: string, accountKey: string, container: string, blobName: string) {
-  const permissions = 'r';
-  const startsOn = isoSeconds(new Date(Date.now() - 5 * 60 * 1000));
-  const expiresOn = isoSeconds(new Date(Date.now() + DOWNLOAD_MINUTES * 60 * 1000));
-  const protocol = 'https';
-  const resource = 'b';
-  const contentDisposition = `attachment; filename="${safeDownloadName(blobName)}"`;
-  const contentType = 'application/zip';
-  const canonicalizedResource = `/blob/${account}/${container}/${blobName}`;
+function amzTimestamp(date: Date) {
+  return date.toISOString().replace(/[:-]|\.\d{3}/g, '');
+}
 
-  // Azure service SAS string-to-sign for Blob Storage service versions 2020-12-06 and later.
-  const stringToSign = [
-    permissions,
-    startsOn,
-    expiresOn,
-    canonicalizedResource,
-    '', // signedIdentifier
-    '', // signedIP
-    protocol,
-    SAS_VERSION,
-    resource,
-    '', // signedSnapshotTime
-    '', // signedEncryptionScope
-    '', // rscc
-    contentDisposition,
-    '', // rsce
-    '', // rscl
-    contentType,
+function createR2ReadUrl(
+  accountId: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  bucket: string,
+  objectKey: string,
+) {
+  const now = new Date();
+  const amzDate = amzTimestamp(now);
+  const dateStamp = amzDate.slice(0, 8);
+  const expiresSeconds = DOWNLOAD_MINUTES * 60;
+  const host = `${accountId}.r2.cloudflarestorage.com`;
+  const canonicalUri = canonicalObjectPath(bucket, objectKey);
+  const credentialScope = `${dateStamp}/${R2_REGION}/${R2_SERVICE}/aws4_request`;
+
+  const query = new Map<string, string>([
+    ['X-Amz-Algorithm', 'AWS4-HMAC-SHA256'],
+    ['X-Amz-Content-Sha256', 'UNSIGNED-PAYLOAD'],
+    ['X-Amz-Credential', `${accessKeyId}/${credentialScope}`],
+    ['X-Amz-Date', amzDate],
+    ['X-Amz-Expires', String(expiresSeconds)],
+    ['X-Amz-SignedHeaders', 'host'],
+  ]);
+
+  const canonicalQuery = [...query.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${awsEncode(key)}=${awsEncode(value)}`)
+    .join('&');
+
+  const canonicalHeaders = `host:${host}\n`;
+  const canonicalRequest = [
+    'GET',
+    canonicalUri,
+    canonicalQuery,
+    canonicalHeaders,
+    'host',
+    'UNSIGNED-PAYLOAD',
   ].join('\n');
 
-  let decodedKey: Buffer;
-  try {
-    decodedKey = Buffer.from(accountKey, 'base64');
-  } catch {
-    throw new Error('Azure Storage key is invalid.');
-  }
-  if (!decodedKey.length) throw new Error('Azure Storage key is invalid.');
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256(canonicalRequest),
+  ].join('\n');
 
-  const signature = createHmac('sha256', decodedKey).update(stringToSign, 'utf8').digest('base64');
-  const params = new URLSearchParams({
-    sp: permissions,
-    st: startsOn,
-    se: expiresOn,
-    spr: protocol,
-    sv: SAS_VERSION,
-    sr: resource,
-    rscd: contentDisposition,
-    rsct: contentType,
-    sig: signature,
-  });
+  const kDate = hmac(`AWS4${secretAccessKey}`, dateStamp);
+  const kRegion = hmac(kDate, R2_REGION);
+  const kService = hmac(kRegion, R2_SERVICE);
+  const kSigning = hmac(kService, 'aws4_request');
+  const signature = createHmac('sha256', kSigning).update(stringToSign, 'utf8').digest('hex');
 
-  const encodedBlobPath = blobName.split('/').map(encodeURIComponent).join('/');
+  const finalQuery = `${canonicalQuery}&X-Amz-Signature=${signature}`;
   return {
-    url: `https://${account}.blob.core.windows.net/${encodeURIComponent(container)}/${encodedBlobPath}?${params.toString()}`,
-    expiresAt: expiresOn,
+    url: `https://${host}${canonicalUri}?${finalQuery}`,
+    expiresAt: new Date(now.getTime() + expiresSeconds * 1000).toISOString(),
   };
 }
 
@@ -155,28 +168,41 @@ export async function POST(request: Request) {
     let message = 'Your TenantIQ package is verified. Private download publishing is still pending.';
 
     if (metadata.tenantiq_delivery_status === 'download_ready') {
-      const configuredAccount = process.env.TENANTIQ_AZURE_STORAGE_ACCOUNT?.trim();
-      const accountKey = process.env.TENANTIQ_AZURE_STORAGE_KEY?.trim();
-      const configuredContainer = process.env.TENANTIQ_AZURE_STORAGE_CONTAINER?.trim() || 'tenantiq-deliveries';
-      const storageAccount = metadata.tenantiq_storage_account;
-      const storageContainer = metadata.tenantiq_storage_container;
-      const storageBlob = metadata.tenantiq_storage_blob;
+      const accountId = process.env.TENANTIQ_R2_ACCOUNT_ID?.trim();
+      const accessKeyId = process.env.TENANTIQ_R2_ACCESS_KEY_ID?.trim();
+      const secretAccessKey = process.env.TENANTIQ_R2_SECRET_ACCESS_KEY?.trim();
+      const configuredBucket = process.env.TENANTIQ_R2_BUCKET?.trim() || 'tenantiq-deliveries';
+      const storageProvider = metadata.tenantiq_storage_provider;
+      const storageBucket = metadata.tenantiq_storage_bucket;
+      const storageObject = metadata.tenantiq_storage_object;
 
-      if (!configuredAccount || !accountKey) {
-        return NextResponse.json({ error: 'Private download storage is not configured on the TenantIQ site.' }, { status: 503 });
+      if (!accountId || !accessKeyId || !secretAccessKey) {
+        return NextResponse.json({ error: 'Private R2 download storage is not configured on the TenantIQ site.' }, { status: 503 });
       }
-      if (storageAccount !== configuredAccount || storageContainer !== configuredContainer || !storageBlob) {
-        console.error('[TenantIQ claim] Stripe storage metadata does not match configured private storage.', {
-          storageAccount,
-          storageContainer,
-          storageBlob: Boolean(storageBlob),
+      if (
+        storageProvider !== 'cloudflare_r2' ||
+        storageBucket !== configuredBucket ||
+        !storageObject ||
+        typeof storageObject !== 'string' ||
+        !storageObject.startsWith('deliveries/')
+      ) {
+        console.error('[TenantIQ claim] Stripe R2 metadata does not match configured private storage.', {
+          storageProvider,
+          storageBucket,
+          storageObject: Boolean(storageObject),
         });
         return NextResponse.json({ error: 'Private package storage metadata is invalid.' }, { status: 409 });
       }
 
-      const sas = createBlobReadSas(configuredAccount, accountKey, configuredContainer, storageBlob);
-      downloadUrl = sas.url;
-      downloadExpiresAt = sas.expiresAt;
+      const signed = createR2ReadUrl(
+        accountId,
+        accessKeyId,
+        secretAccessKey,
+        configuredBucket,
+        storageObject,
+      );
+      downloadUrl = signed.url;
+      downloadExpiresAt = signed.expiresAt;
       message = `Your TenantIQ package is verified and ready. The download link below is valid for ${DOWNLOAD_MINUTES} minutes.`;
     }
 

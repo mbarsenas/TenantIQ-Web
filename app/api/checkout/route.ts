@@ -36,7 +36,6 @@ export async function POST(request: Request) {
     params.set('cancel_url', `${origin}/pricing/cancel`);
     params.set('allow_promotion_codes', 'true');
     params.set('billing_address_collection', 'auto');
-    params.set('customer_creation', 'always');
     params.set('subscription_data[metadata][product]', 'TenantIQ');
     params.set('subscription_data[metadata][edition]', edition);
     params.set('metadata[product]', 'TenantIQ');

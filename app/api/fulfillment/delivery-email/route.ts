@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
 import { sendTenantIQDeliveryEmail } from '../../../../lib/resend-mail';
 
@@ -150,13 +150,14 @@ export async function POST(request: Request) {
 
     let resendEmailId: string;
     try {
+      const claimFingerprint = createHash('sha256').update(claimUrl, 'utf8').digest('hex').slice(0, 24);
       resendEmailId = await sendTenantIQDeliveryEmail({
         to: email,
         edition,
         licenseId,
         claimUrl,
         claimExpiresAt,
-        idempotencyKey: `tenantiq-delivery-${subscriptionId}-${licenseId}`,
+        idempotencyKey: `tenantiq-delivery-${subscriptionId}-${licenseId}-${claimFingerprint}`,
       });
     } catch (error) {
       await stripePost(

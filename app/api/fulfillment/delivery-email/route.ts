@@ -39,8 +39,15 @@ async function stripePost(path: string, secretKey: string, params: URLSearchPara
 function validateClaimUrl(value: string) {
   const url = new URL(value);
   const allowedOrigin = new URL(process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://tenantiq365.com');
-  if (url.protocol !== 'https:' || url.origin !== allowedOrigin.origin || url.pathname !== '/claim') {
+
+  // Require an exact match to the configured site origin. This permits HTTP only when
+  // the configured origin itself is HTTP (for example local development), while the
+  // production default remains HTTPS.
+  if (url.origin !== allowedOrigin.origin || url.pathname !== '/claim') {
     throw new Error('Claim URL must use the configured TenantIQ /claim endpoint.');
+  }
+  if (allowedOrigin.protocol === 'https:' && url.protocol !== 'https:') {
+    throw new Error('Production claim URLs must use HTTPS.');
   }
   if (!url.searchParams.get('token')) throw new Error('Claim URL is missing its claim token.');
   return url.toString();

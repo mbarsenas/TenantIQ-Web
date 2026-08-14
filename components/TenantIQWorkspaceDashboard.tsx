@@ -28,6 +28,24 @@ type PostureSummary = {
   priority_findings?: PriorityFinding[];
 };
 
+type WorkloadPosture = {
+  key: string;
+  label: string;
+  assessment: Assessment | null;
+  summary: PostureSummary | null;
+};
+
+const WORKLOADS = [
+  { key: 'entra', label: 'Entra ID' },
+  { key: 'exchange', label: 'Exchange Online' },
+  { key: 'sharepoint', label: 'SharePoint Online' },
+  { key: 'teams', label: 'Teams' },
+  { key: 'onedrive', label: 'OneDrive' },
+  { key: 'intune', label: 'Intune' },
+  { key: 'defender', label: 'Defender' },
+  { key: 'purview', label: 'Microsoft Purview' },
+] as const;
+
 async function jsonResponse(response: Response) {
   const text = await response.text();
   if (!text) return null;
@@ -39,9 +57,39 @@ function count(summary: PostureSummary | null, key: string) {
   return Number(summary.status_counts[key] || summary.status_counts[key.toUpperCase()] || 0);
 }
 
+function workloadKey(name: string) {
+  const value = name.toLowerCase();
+  if (value.includes('exchange')) return 'exchange';
+  if (value.includes('entra') || value.includes('azuread') || value.includes('azure-ad')) return 'entra';
+  if (value.includes('sharepoint')) return 'sharepoint';
+  if (value.includes('teams')) return 'teams';
+  if (value.includes('onedrive')) return 'onedrive';
+  if (value.includes('intune')) return 'intune';
+  if (value.includes('defender')) return 'defender';
+  if (value.includes('purview')) return 'purview';
+  return '';
+}
+
+function severityRank(value?: string) {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'CRITICAL') return 5;
+  if (normalized === 'HIGH') return 4;
+  if (normalized === 'MEDIUM') return 3;
+  if (normalized === 'LOW') return 2;
+  if (normalized === 'INFO') return 1;
+  return 0;
+}
+
+function statusRank(value?: string) {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'FAIL') return 3;
+  if (normalized === 'WARNING') return 2;
+  return 0;
+}
+
 export default function TenantIQWorkspaceDashboard() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [summary, setSummary] = useState<PostureSummary | null>(null);
+  const [summaries, setSummaries] = useState<Record<string, PostureSummary>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -55,11 +103,18 @@ export default function TenantIQWorkspaceDashboard() {
         setAssessments(items);
         if (!items.length) return;
 
-        const latest = items[0];
-        const summaryResponse = await fetch(`/api/assistant/assessments/${encodeURIComponent(latest.assessment_id)}/summary`, { cache: 'no-store' });
-        const summaryPayload = await jsonResponse(summaryResponse);
-        if (!summaryResponse.ok) throw new Error(summaryPayload?.detail || 'Unable to load assessment posture.');
-        setSummary(summaryPayload as PostureSummary);
+        const summaryPairs = await Promise.all(items.map(async (item) => {
+          const response = await fetch(`/api/assistant/assessments/${encodeURIComponent(item.assessment_id)}/summary`, { cache: 'no-store' });
+          const payload = await jsonResponse(response);
+          if (!response.ok) return [item.assessment_id, null] as const;
+          return [item.assessment_id, payload as PostureSummary] as const;
+        }));
+
+        const next: Record<string, PostureSummary> = {};
+        for (const [assessmentId, summary] of summaryPairs) {
+          if (summary) next[assessmentId] = summary;
+        }
+        setSummaries(next);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to load TenantIQ workspace posture.');
       } finally {
@@ -69,64 +124,138 @@ export default function TenantIQWorkspaceDashboard() {
     load();
   }, []);
 
-  const totalFindings = useMemo(() => assessments.reduce((sum, item) => sum + Number(item.finding_count || 0), 0), [assessments]);
+  const workloadPosture = useMemo<WorkloadPosture[]>(() => {
+    return WORKLOADS.map((workload) => {
+      const matching = assessments
+        .filter((item) => workloadKey(item.source_name || item.assessment_id) === workload.key)
+        .sort((a, b) => new Date(b.imported_at || 0).getTime() - new Date(a.imported_at || 0).getTime());
+      const assessment = matching[0] || null;
+      return {
+        ...workload,
+        assessment,
+        summary: assessment ? summaries[assessment.assessment_id] || null : null,
+      };
+    });
+  }, [assessments, summaries]);
 
-  if (loading) return <section style={panelStyle}>Loading current TenantIQ posture…</section>;
+  const selectedWorkloads = workloadPosture.filter((item) => item.assessment && item.summary);
+  const totals = selectedWorkloads.reduce((acc, item) => {
+    acc.findings += Number(item.summary?.finding_count || item.assessment?.finding_count || 0);
+    acc.fail += count(item.summary, 'FAIL');
+    acc.warning += count(item.summary, 'WARNING');
+    acc.pass += count(item.summary, 'PASS');
+    acc.info += count(item.summary, 'INFO');
+    return acc;
+  }, { findings: 0, fail: 0, warning: 0, pass: 0, info: 0 });
+
+  const topFindings = selectedWorkloads
+    .flatMap((item) => (item.summary?.priority_findings || []).map((finding) => ({ ...finding, workload: item.label, assessmentId: item.assessment?.assessment_id || '' })))
+    .filter((finding) => ['FAIL', 'WARNING'].includes(String(finding.status || '').toUpperCase()))
+    .sort((a, b) => {
+      const severityDelta = severityRank(b.severity) - severityRank(a.severity);
+      if (severityDelta) return severityDelta;
+      return statusRank(b.status) - statusRank(a.status);
+    })
+    .slice(0, 8);
+
+  if (loading) return <section style={panelStyle}>Loading tenant-wide TenantIQ posture…</section>;
   if (error) return <section style={{ ...panelStyle, borderColor: 'rgba(255,90,90,.25)', color: '#ffaaaa' }}>{error}</section>;
   if (!assessments.length) return <section style={panelStyle}>No assessments are stored yet. Upload one from the Assistant to populate the dashboard.</section>;
 
-  const fail = count(summary, 'FAIL');
-  const warning = count(summary, 'WARNING');
-  const pass = count(summary, 'PASS');
-  const info = count(summary, 'INFO');
-  const latest = assessments[0];
-  const priorities = summary?.priority_findings || [];
-
   return (
     <section style={{ marginBottom: 28 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
-        <Metric label="Assessments" value={String(assessments.length)} />
-        <Metric label="Stored findings" value={String(totalFindings)} />
-        <Metric label="FAIL" value={String(fail)} emphasis={fail > 0} />
-        <Metric label="WARNING" value={String(warning)} emphasis={warning > 0} />
-        <Metric label="PASS" value={String(pass)} />
-        <Metric label="INFO" value={String(info)} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 12, marginBottom: 16 }}>
+        <Metric label="Workloads assessed" value={`${selectedWorkloads.length}/8`} />
+        <Metric label="Tenant findings" value={String(totals.findings)} />
+        <Metric label="FAIL" value={String(totals.fail)} emphasis={totals.fail > 0} tone="fail" />
+        <Metric label="WARNING" value={String(totals.warning)} emphasis={totals.warning > 0} tone="warning" />
+        <Metric label="PASS" value={String(totals.pass)} />
+        <Metric label="INFO" value={String(totals.info)} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(280px,.8fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(320px,.85fr)', gap: 16, marginBottom: 16 }}>
         <article style={panelStyle}>
-          <div style={eyebrowStyle}>Latest assessment posture</div>
-          <h2 style={{ margin: '8px 0 6px', fontSize: 21, overflowWrap: 'anywhere' }}>{latest.source_name || latest.assessment_id}</h2>
-          <div style={{ color: '#8496aa', fontSize: 13, marginBottom: 16 }}>{latest.imported_at ? new Date(latest.imported_at).toLocaleString() : 'Import time unavailable'} · {summary?.finding_count ?? latest.finding_count} findings</div>
-          {priorities.length ? (
-            <div style={{ display: 'grid', gap: 10 }}>
-              {priorities.slice(0, 4).map((finding, index) => (
-                <div key={`${finding.check_id || index}`} style={{ borderTop: index ? '1px solid rgba(86,160,255,.12)' : 'none', paddingTop: index ? 10 : 0 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <strong style={{ color: '#eef5fd', fontSize: 14 }}>{finding.check_id || finding.title || 'Priority finding'}</strong>
-                    <span style={{ color: finding.status === 'FAIL' ? '#ff9b9b' : '#f3d77a', fontSize: 11, fontWeight: 900 }}>{finding.status || 'REVIEW'}</span>
+          <div style={eyebrowStyle}>Tenant posture overview</div>
+          <h2 style={{ margin: '8px 0 4px', fontSize: 22 }}>Microsoft 365 workload posture</h2>
+          <p style={{ color: '#8496aa', fontSize: 13, margin: '0 0 16px' }}>Uses the latest stored assessment for each workload.</p>
+
+          <div style={{ display: 'grid', gap: 8 }}>
+            {workloadPosture.map((item) => {
+              const fail = count(item.summary, 'FAIL');
+              const warning = count(item.summary, 'WARNING');
+              const assessed = Boolean(item.assessment && item.summary);
+              return (
+                <div key={item.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(170px,1fr) auto', gap: 12, alignItems: 'center', padding: '11px 0', borderTop: '1px solid rgba(86,160,255,.10)' }}>
+                  <div>
+                    <div style={{ color: assessed ? '#e8f1fb' : '#6f8195', fontWeight: 800, fontSize: 14 }}>{item.label}</div>
+                    <div style={{ color: '#718398', fontSize: 11, marginTop: 2 }}>{assessed ? `${item.summary?.finding_count ?? item.assessment?.finding_count ?? 0} findings · latest assessment` : 'No assessment uploaded'}</div>
+                  </div>
+                  {assessed ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <StatusPill label={`${fail} Fail`} active={fail > 0} kind="fail" />
+                      <StatusPill label={`${warning} Warning`} active={warning > 0} kind="warning" />
+                      <a href={`/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment!.assessment_id)}`} style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Open →</a>
+                    </div>
+                  ) : <span style={{ color: '#65778c', fontSize: 12, fontWeight: 700 }}>Not assessed</span>}
+                </div>
+              );
+            })}
+          </div>
+        </article>
+
+        <article style={panelStyle}>
+          <div style={eyebrowStyle}>Tenant coverage</div>
+          <h2 style={{ margin: '8px 0 8px', fontSize: 22 }}>{selectedWorkloads.length === 8 ? 'Full workload coverage' : `${8 - selectedWorkloads.length} workload${8 - selectedWorkloads.length === 1 ? '' : 's'} remaining`}</h2>
+          <p style={{ color: '#96a6b8', lineHeight: 1.6, margin: '0 0 18px', fontSize: 14 }}>{selectedWorkloads.length === 8 ? 'TenantIQ has a current assessment for all eight Microsoft 365 workloads.' : 'Upload the remaining workload assessments to complete the tenant-wide posture view.'}</p>
+          <div style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: 'rgba(86,160,255,.10)', border: '1px solid rgba(86,160,255,.16)', marginBottom: 10 }}>
+            <div style={{ height: '100%', width: `${(selectedWorkloads.length / 8) * 100}%`, borderRadius: 999, background: '#2f87ff' }} />
+          </div>
+          <div style={{ color: '#8193a8', fontSize: 12, marginBottom: 20 }}>{Math.round((selectedWorkloads.length / 8) * 100)}% workload coverage</div>
+          <a href="/assistant" style={primaryLinkStyle}>Upload another assessment</a>
+        </article>
+      </div>
+
+      <article style={panelStyle}>
+        <div style={eyebrowStyle}>Top priority findings</div>
+        <h2 style={{ margin: '8px 0 6px', fontSize: 22 }}>Tenant-wide remediation priorities</h2>
+        <p style={{ color: '#8496aa', fontSize: 13, margin: '0 0 16px' }}>Highest-severity FAIL and WARNING findings across the latest assessment for each workload.</p>
+
+        {topFindings.length ? (
+          <div style={{ display: 'grid', gap: 0 }}>
+            {topFindings.map((finding, index) => (
+              <div key={`${finding.workload}-${finding.check_id || index}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,.65fr) minmax(260px,1.35fr) auto', gap: 16, alignItems: 'center', padding: '13px 0', borderTop: index ? '1px solid rgba(86,160,255,.11)' : 'none' }}>
+                <div>
+                  <div style={{ color: '#8fc7ff', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.05em' }}>{finding.workload}</div>
+                  <div style={{ color: '#eef5fd', fontWeight: 850, fontSize: 14, marginTop: 3 }}>{finding.check_id || 'Priority finding'}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#dce7f4', fontSize: 14, fontWeight: 750 }}>{finding.title || finding.check_id || 'Priority finding'}</div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <span style={{ color: String(finding.status).toUpperCase() === 'FAIL' ? '#ff9b9b' : '#f3d77a', fontSize: 11, fontWeight: 900 }}>{finding.status || 'REVIEW'}</span>
                     {finding.severity ? <span style={{ color: '#9bb0c7', fontSize: 11 }}>{finding.severity}</span> : null}
                   </div>
-                  {finding.title && finding.title !== finding.check_id ? <div style={{ color: '#9eacbd', fontSize: 13, marginTop: 3 }}>{finding.title}</div> : null}
                 </div>
-              ))}
-            </div>
-          ) : <div style={{ color: '#90a1b4' }}>No FAIL or WARNING findings are present in the latest assessment.</div>}
-        </article>
-
-        <article style={panelStyle}>
-          <div style={eyebrowStyle}>Next action</div>
-          <h2 style={{ margin: '8px 0 8px', fontSize: 21 }}>{fail || warning ? 'Review priority findings' : 'Posture looks healthy'}</h2>
-          <p style={{ color: '#96a6b8', lineHeight: 1.6, margin: '0 0 18px', fontSize: 14 }}>{fail || warning ? 'Open the latest assessment in the Knowledge Assistant for evidence-grounded remediation guidance.' : 'Use the Assistant to review informational findings or upload another workload assessment.'}</p>
-          <a href={`/api/assistant/select-assessment?assessment=${encodeURIComponent(latest.assessment_id)}`} style={primaryLinkStyle}>Open latest in Assistant</a>
-        </article>
-      </div>
+                <a href={`/api/assistant/select-assessment?assessment=${encodeURIComponent(finding.assessmentId)}`} style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>Investigate →</a>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ color: '#90a1b4' }}>No FAIL or WARNING findings are present in the latest workload assessments.</div>}
+      </article>
     </section>
   );
 }
 
-function Metric({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
-  return <div style={{ border: `1px solid ${emphasis ? 'rgba(244,196,48,.28)' : 'rgba(86,160,255,.17)'}`, borderRadius: 14, background: emphasis ? 'rgba(244,196,48,.06)' : 'rgba(8,22,40,.66)', padding: 15 }}><div style={{ color: '#8192a6', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div><div style={{ color: emphasis ? '#f4d35e' : '#f3f7fc', fontSize: 26, fontWeight: 900, marginTop: 6 }}>{value}</div></div>;
+function Metric({ label, value, emphasis = false, tone }: { label: string; value: string; emphasis?: boolean; tone?: 'fail' | 'warning' }) {
+  const border = emphasis ? (tone === 'fail' ? 'rgba(255,105,105,.30)' : 'rgba(244,196,48,.28)') : 'rgba(86,160,255,.17)';
+  const background = emphasis ? (tone === 'fail' ? 'rgba(255,85,85,.06)' : 'rgba(244,196,48,.06)') : 'rgba(8,22,40,.66)';
+  const color = emphasis ? (tone === 'fail' ? '#ff9b9b' : '#f4d35e') : '#f3f7fc';
+  return <div style={{ border: `1px solid ${border}`, borderRadius: 14, background, padding: 15 }}><div style={{ color: '#8192a6', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div><div style={{ color, fontSize: 26, fontWeight: 900, marginTop: 6 }}>{value}</div></div>;
+}
+
+function StatusPill({ label, active, kind }: { label: string; active: boolean; kind: 'fail' | 'warning' }) {
+  const color = active ? (kind === 'fail' ? '#ff9b9b' : '#f3d77a') : '#718398';
+  const background = active ? (kind === 'fail' ? 'rgba(255,85,85,.08)' : 'rgba(244,196,48,.07)') : 'rgba(255,255,255,.025)';
+  return <span style={{ borderRadius: 999, padding: '4px 8px', background, color, fontSize: 11, fontWeight: 850 }}>{label}</span>;
 }
 
 const panelStyle = { border: '1px solid rgba(86,160,255,.18)', borderRadius: 16, background: 'rgba(8,22,40,.72)', padding: 20, color: '#dce7f4' };

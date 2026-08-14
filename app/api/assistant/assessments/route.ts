@@ -1,18 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { buildRagIdentityHeaders, getAuthenticatedCustomerId } from '../../../../lib/tenantiq-auth';
 import { getTenantIQRagApiBase } from '../../../../lib/tenantiq-rag';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   let ragApiBase: string;
   let identityHeaders: Record<string, string>;
 
   try {
     ragApiBase = getTenantIQRagApiBase();
-    identityHeaders = buildRagIdentityHeaders(getAuthenticatedCustomerId(request));
+    identityHeaders = buildRagIdentityHeaders(await getAuthenticatedCustomerId());
   } catch (error) {
     return NextResponse.json(
       { detail: error instanceof Error ? error.message : 'TenantIQ authentication or backend configuration is invalid.' },
-      { status: 503 },
+      { status: 401 },
     );
   }
 

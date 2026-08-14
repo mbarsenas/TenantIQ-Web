@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
-import { auth } from '../../auth';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
 import TenantIQAssessments from '../../components/TenantIQAssessments';
+import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 
 export default async function AssessmentsPage() {
-  const session = await auth();
+  const { session, entitlement } = await requireTenantIQEntitlement();
   if (!session?.user?.id) redirect('/signin');
+  if (!entitlement.entitled) redirect('/license-required');
 
   return (
     <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>

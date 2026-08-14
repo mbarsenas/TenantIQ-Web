@@ -28,19 +28,57 @@ async function stripeGet(path: string, query: URLSearchParams) {
 }
 
 function isUsableSubscription(subscription: any) {
-  return ['active', 'trialing'].includes(String(subscription?.status || ''));
+  return ['active', 'trialing'].includes(String(subscription?.status || '').toLowerCase());
 }
 
 function isTenantIQSubscription(subscription: any) {
   const metadata = subscription?.metadata || {};
-  return metadata.tenantiq_product === 'TenantIQ' || Boolean(metadata.tenantiq_edition || metadata.edition);
+  return (
+    String(metadata.tenantiq_product || '').toLowerCase() === 'tenantiq' ||
+    Boolean(metadata.tenantiq_edition || metadata.edition || metadata.tenantiq_license_id)
+  );
 }
 
 function isFulfilled(subscription: any) {
   const metadata = subscription?.metadata || {};
-  // Current fulfillment marks issued customer packages as license_issued.
-  // The explicit override exists only for controlled migrations/support cases.
-  return metadata.tenantiq_fulfillment_status === 'license_issued' || metadata.tenantiq_workspace_access === 'enabled';
+  return (
+    metadata.tenantiq_fulfillment_status === 'license_issued' ||
+    metadata.tenantiq_workspace_access === 'enabled' ||
+    Boolean(metadata.tenantiq_license_id && metadata.tenantiq_license_issued_at)
+  );
+}
+
+function entitlementFromSubscription(subscription: any): TenantIQEntitlement | null {
+  if (!isTenantIQSubscription(subscription) || !isUsableSubscription(subscription) || !isFulfilled(subscription)) {
+    return null;
+  }
+
+  const metadata = subscription.metadata || {};
+  return {
+    entitled: true,
+    reason: 'active',
+    edition: metadata.tenantiq_edition || metadata.edition || 'TenantIQ',
+    subscriptionId: subscription.id,
+    status: subscription.status,
+  };
+}
+
+async function subscriptionsForCustomer(customerId: string) {
+  const query = new URLSearchParams({ customer: customerId, status: 'all', limit: '100' });
+  const payload = await stripeGet('subscriptions', query);
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+async function subscriptionsForPurchaseEmail(email: string) {
+  // Fulfillment persists the Checkout email directly on the subscription as
+  // tenantiq_customer_email. This is a more reliable entitlement join than
+  // depending exclusively on Stripe Customer.email, which may be blank or
+  // differ for older/test Checkout customers.
+  const query = new URLSearchParams();
+  query.set('query', `metadata['tenantiq_customer_email']:'${email.replace(/'/g, "\\'")}'`);
+  query.set('limit', '100');
+  const payload = await stripeGet('subscriptions/search', query);
+  return Array.isArray(payload?.data) ? payload.data : [];
 }
 
 export async function getTenantIQEntitlement(email?: string | null): Promise<TenantIQEntitlement> {
@@ -53,37 +91,40 @@ export async function getTenantIQEntitlement(email?: string | null): Promise<Ten
   }
 
   try {
+    const subscriptionsById = new Map<string, any>();
+
     const customerQuery = new URLSearchParams({ email: normalizedEmail, limit: '100' });
     const customersPayload = await stripeGet('customers', customerQuery);
     const customers = Array.isArray(customersPayload?.data) ? customersPayload.data : [];
 
-    if (customers.length === 0) return { entitled: false, reason: 'no_purchase' };
+    for (const customer of customers) {
+      if (!customer?.id) continue;
+      for (const subscription of await subscriptionsForCustomer(customer.id)) {
+        if (subscription?.id) subscriptionsById.set(subscription.id, subscription);
+      }
+    }
+
+    // Also join on the purchase email written by the TenantIQ Checkout
+    // webhook. This fixes valid fulfilled purchases whose Stripe Customer
+    // record does not have the same top-level email value.
+    for (const subscription of await subscriptionsForPurchaseEmail(normalizedEmail)) {
+      if (subscription?.id) subscriptionsById.set(subscription.id, subscription);
+    }
+
+    const subscriptions = [...subscriptionsById.values()];
+    if (!subscriptions.length) return { entitled: false, reason: 'no_purchase' };
 
     let sawTenantIQ = false;
     let sawUsable = false;
 
-    for (const customer of customers) {
-      if (!customer?.id) continue;
-      const subscriptionQuery = new URLSearchParams({ customer: customer.id, status: 'all', limit: '100' });
-      const subscriptionsPayload = await stripeGet('subscriptions', subscriptionQuery);
-      const subscriptions = Array.isArray(subscriptionsPayload?.data) ? subscriptionsPayload.data : [];
+    for (const subscription of subscriptions) {
+      if (!isTenantIQSubscription(subscription)) continue;
+      sawTenantIQ = true;
+      if (!isUsableSubscription(subscription)) continue;
+      sawUsable = true;
 
-      for (const subscription of subscriptions) {
-        if (!isTenantIQSubscription(subscription)) continue;
-        sawTenantIQ = true;
-        if (!isUsableSubscription(subscription)) continue;
-        sawUsable = true;
-        if (!isFulfilled(subscription)) continue;
-
-        const metadata = subscription.metadata || {};
-        return {
-          entitled: true,
-          reason: 'active',
-          edition: metadata.tenantiq_edition || metadata.edition || 'TenantIQ',
-          subscriptionId: subscription.id,
-          status: subscription.status,
-        };
-      }
+      const entitlement = entitlementFromSubscription(subscription);
+      if (entitlement) return entitlement;
     }
 
     if (!sawTenantIQ) return { entitled: false, reason: 'no_purchase' };

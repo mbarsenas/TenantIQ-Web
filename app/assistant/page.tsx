@@ -4,9 +4,9 @@ import { auth } from '../../auth';
 
 export default async function AssistantPage() {
   const session = await auth();
-  if (!session?.user?.id || !session.user.tenantId) {
+  if (!session?.user?.id) {
     redirect('/signin');
   }
 
-  return <TenantIQAssistant />;
+  return <TenantIQAssistant signedInUser={session.user.name || session.user.email || undefined} />;
 }

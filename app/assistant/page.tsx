@@ -2,20 +2,20 @@ import { redirect } from 'next/navigation';
 import TenantIQAssistant from '../../components/TenantIQAssistant';
 import { auth, signOut } from '../../auth';
 
+async function handleSignOut(): Promise<void> {
+  'use server';
+  await signOut({ redirectTo: '/signin' });
+}
+
 export default async function AssistantPage() {
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !user.id) {
+  if (!user?.id) {
     redirect('/signin');
   }
 
   const signedInUser: string = user.name || user.email || 'TenantIQ user';
-
-  async function handleSignOut() {
-    'use server';
-    await signOut({ redirectTo: '/signin' });
-  }
 
   return (
     <>

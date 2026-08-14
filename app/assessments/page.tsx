@@ -14,7 +14,7 @@ export default async function AssessmentsPage() {
         <div style={{ marginBottom: 26 }}>
           <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ assessments</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,54px)', lineHeight: 1.05, margin: '10px 0 12px' }}>Your assessment history.</h1>
-          <p style={{ maxWidth: 720, color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, margin: 0 }}>Review the TenantIQ assessments stored in your workspace and open any assessment directly in the Knowledge Assistant.</p>
+          <p style={{ maxWidth: 720, color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, margin: 0 }}>Review the TenantIQ assessments stored in your workspace, then open the Knowledge Assistant to select and analyze any stored assessment.</p>
         </div>
         <TenantIQAssessments />
       </div>

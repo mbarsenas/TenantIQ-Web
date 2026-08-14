@@ -1,28 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { buildRagIdentityHeaders, getAuthenticatedCustomerId } from '../../../../lib/tenantiq-auth';
 import { getTenantIQRagApiBase } from '../../../../lib/tenantiq-rag';
-
-const DEFAULT_CUSTOMER_ID = process.env.TENANTIQ_DEFAULT_CUSTOMER_ID?.trim() || 'local-dev';
-
-function customerId(request: NextRequest): string {
-  return request.headers.get('x-tenantiq-customer-id')?.trim() || DEFAULT_CUSTOMER_ID;
-}
 
 export async function GET(request: NextRequest) {
   let ragApiBase: string;
+  let identityHeaders: Record<string, string>;
 
   try {
     ragApiBase = getTenantIQRagApiBase();
+    identityHeaders = buildRagIdentityHeaders(getAuthenticatedCustomerId(request));
   } catch (error) {
     return NextResponse.json(
-      { detail: error instanceof Error ? error.message : 'TenantIQ RAG API configuration is invalid.' },
-      { status: 500 },
+      { detail: error instanceof Error ? error.message : 'TenantIQ authentication or backend configuration is invalid.' },
+      { status: 503 },
     );
   }
 
   try {
     const response = await fetch(`${ragApiBase}/assessments`, {
       method: 'GET',
-      headers: { 'X-TenantIQ-Customer-ID': customerId(request) },
+      headers: identityHeaders,
       cache: 'no-store',
     });
 

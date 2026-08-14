@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getTenantIqRagApiBase } from '../../../../lib/tenantiq-rag';
+import { getTenantIQRagApiBase } from '../../../../lib/tenantiq-rag';
 
 export async function GET() {
   let ragApiBase: string;
 
   try {
-    ragApiBase = getTenantIqRagApiBase();
+    ragApiBase = getTenantIQRagApiBase();
   } catch (error) {
     return NextResponse.json(
       { detail: error instanceof Error ? error.message : 'TenantIQ RAG API configuration is invalid.' },

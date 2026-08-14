@@ -100,18 +100,28 @@ function EvidencePanel({ message }: { message: ChatMessage }) {
 
   return (
     <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(86,160,255,.16)' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: hasChecks || hasSources ? 10 : 0 }}>
-        <span style={{ color: '#8fc7ff', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Evidence & sources</span>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ color: '#8fc7ff', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Evidence</span>
         {message.findingCount ? <span style={{ borderRadius: 999, padding: '4px 8px', background: 'rgba(47,135,255,.11)', color: '#9dcbff', fontSize: 11, fontWeight: 700 }}>{message.findingCount} findings analyzed</span> : null}
       </div>
 
-      {hasChecks && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: hasSources ? 10 : 0 }}>
-        {checkIds.map((checkId) => <span key={checkId} style={{ borderRadius: 8, padding: '5px 8px', border: '1px solid rgba(86,160,255,.22)', background: 'rgba(86,160,255,.06)', color: '#c6dcf7', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{checkId}</span>)}
+      {hasChecks && <div style={{ marginTop: 10 }}>
+        <div style={{ color: '#98a6b8', fontSize: 11, fontWeight: 700, marginBottom: 7 }}>Assessment findings referenced</div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          {checkIds.map((checkId) => <span key={checkId} style={{ borderRadius: 8, padding: '5px 8px', border: '1px solid rgba(86,160,255,.22)', background: 'rgba(86,160,255,.06)', color: '#c6dcf7', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{checkId}</span>)}
+        </div>
       </div>}
 
-      {hasSources && <div style={{ display: 'grid', gap: 6 }}>
-        {sources.map((source) => <div key={source} title={source} style={{ display: 'grid', gridTemplateColumns: '14px minmax(0,1fr)', gap: 7, alignItems: 'start', color: '#9ca8b8', fontSize: 12, lineHeight: 1.45 }}><span>↳</span><span style={{ overflowWrap: 'anywhere' }}>{source}</span></div>)}
-      </div>}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ color: '#98a6b8', fontSize: 11, fontWeight: 700, marginBottom: 7 }}>Knowledge sources</div>
+        {hasSources ? (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {sources.map((source) => <div key={source} title={source} style={{ display: 'grid', gridTemplateColumns: '14px minmax(0,1fr)', gap: 7, alignItems: 'start', color: '#9ca8b8', fontSize: 12, lineHeight: 1.45 }}><span>↳</span><span style={{ overflowWrap: 'anywhere' }}>{source}</span></div>)}
+          </div>
+        ) : (
+          <div style={{ color: '#748093', fontSize: 12, lineHeight: 1.45 }}>No indexed TenantIQ knowledge source was used for this answer. The response is grounded in the selected assessment findings shown above.</div>
+        )}
+      </div>
     </div>
   );
 }

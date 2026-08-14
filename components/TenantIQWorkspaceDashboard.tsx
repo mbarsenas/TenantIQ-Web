@@ -130,11 +130,7 @@ export default function TenantIQWorkspaceDashboard() {
         .filter((item) => workloadKey(item.source_name || item.assessment_id) === workload.key)
         .sort((a, b) => new Date(b.imported_at || 0).getTime() - new Date(a.imported_at || 0).getTime());
       const assessment = matching[0] || null;
-      return {
-        ...workload,
-        assessment,
-        summary: assessment ? summaries[assessment.assessment_id] || null : null,
-      };
+      return { ...workload, assessment, summary: assessment ? summaries[assessment.assessment_id] || null : null };
     });
   }, [assessments, summaries]);
 
@@ -178,7 +174,6 @@ export default function TenantIQWorkspaceDashboard() {
           <div style={eyebrowStyle}>Tenant posture overview</div>
           <h2 style={{ margin: '8px 0 4px', fontSize: 22 }}>Microsoft 365 workload posture</h2>
           <p style={{ color: '#8496aa', fontSize: 13, margin: '0 0 16px' }}>Uses the latest stored assessment for each workload.</p>
-
           <div style={{ display: 'grid', gap: 8 }}>
             {workloadPosture.map((item) => {
               const fail = count(item.summary, 'FAIL');
@@ -194,7 +189,7 @@ export default function TenantIQWorkspaceDashboard() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <StatusPill label={`${fail} Fail`} active={fail > 0} kind="fail" />
                       <StatusPill label={`${warning} Warning`} active={warning > 0} kind="warning" />
-                      <a href={`/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment!.assessment_id)}`} style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Open →</a>
+                      <a href={`/assessments/${encodeURIComponent(item.assessment!.assessment_id)}`} style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>View findings →</a>
                     </div>
                   ) : <span style={{ color: '#65778c', fontSize: 12, fontWeight: 700 }}>Not assessed</span>}
                 </div>
@@ -219,7 +214,6 @@ export default function TenantIQWorkspaceDashboard() {
         <div style={eyebrowStyle}>Top priority findings</div>
         <h2 style={{ margin: '8px 0 6px', fontSize: 22 }}>Tenant-wide remediation priorities</h2>
         <p style={{ color: '#8496aa', fontSize: 13, margin: '0 0 16px' }}>Highest-severity FAIL and WARNING findings across the latest assessment for each workload.</p>
-
         {topFindings.length ? (
           <div style={{ display: 'grid', gap: 0 }}>
             {topFindings.map((finding, index) => (
@@ -235,7 +229,7 @@ export default function TenantIQWorkspaceDashboard() {
                     {finding.severity ? <span style={{ color: '#9bb0c7', fontSize: 11 }}>{finding.severity}</span> : null}
                   </div>
                 </div>
-                <a href={`/api/assistant/select-assessment?assessment=${encodeURIComponent(finding.assessmentId)}`} style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>Investigate →</a>
+                <a href={`/assessments/${encodeURIComponent(finding.assessmentId)}${finding.check_id ? `#${encodeURIComponent(finding.check_id)}` : ''}`} style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>Investigate →</a>
               </div>
             ))}
           </div>

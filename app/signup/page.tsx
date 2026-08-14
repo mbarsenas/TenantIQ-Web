@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createUser, findUserByEmail } from '../../lib/tenantiq-users';
-import { signIn } from '../../auth';
+import { createAuthToken, createUser, findUserByEmail } from '../../lib/tenantiq-users';
+import { sendVerificationEmail } from '../../lib/tenantiq-email';
 
 export default async function SignUpPage({
   searchParams,
@@ -26,19 +26,16 @@ export default async function SignUpPage({
       redirect('/signup?error=exists');
     }
 
-    await createUser({ name, email, password });
+    const user = await createUser({ name, email, password });
+    const rawUserId = user.id.replace(/^tenantiq:/, '');
+    const token = await createAuthToken(rawUserId, 'verify-email', 24 * 60);
+    const delivered = await sendVerificationEmail(user.email, token);
 
-    const result = await signIn('tenantiq', {
-      email,
-      password,
-      redirect: false,
-    });
-
-    if (!result || result.error) {
-      redirect('/signin');
+    if (!delivered && process.env.NODE_ENV !== 'production') {
+      console.log(`[TenantIQ] Verification URL: ${(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '')}/verify-email?token=${token}`);
     }
 
-    redirect('/assistant');
+    redirect('/signin?created=1');
   }
 
   const message =

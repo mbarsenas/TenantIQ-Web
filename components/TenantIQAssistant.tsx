@@ -36,6 +36,21 @@ const ASSESSMENTS_API = '/api/assistant/assessments';
 const UPLOAD_API = '/api/assistant/assessments/upload';
 const starterQuestion = 'What are the biggest problems in this tenant and what should be fixed first?';
 
+async function readJsonResponse(response: Response): Promise<any> {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const looksLikeHtml = /^\s*<!doctype|^\s*<html/i.test(text);
+    if (looksLikeHtml || response.status >= 500) {
+      throw new Error('TenantIQ is temporarily unavailable or the assistant service is waking up. Please try again in a moment.');
+    }
+    throw new Error('TenantIQ received an unexpected response from the assistant service. Please try again.');
+  }
+}
+
 function shortAssessmentId(value: string) {
   return value.length > 44 ? `${value.slice(0, 41)}…` : value;
 }
@@ -149,7 +164,7 @@ export default function TenantIQAssistant() {
     setAssessmentsLoading(true);
     try {
       const response = await fetch(ASSESSMENTS_API, { cache: 'no-store' });
-      const payload = await response.json();
+      const payload = await readJsonResponse(response);
       if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ assessments.');
       const items = Array.isArray(payload) ? (payload as AssessmentSummary[]) : [];
       setAssessments(items);
@@ -187,7 +202,7 @@ export default function TenantIQAssistant() {
       const formData = new FormData();
       formData.append('file', file, file.name);
       const response = await fetch(UPLOAD_API, { method: 'POST', body: formData });
-      const payload = await response.json();
+      const payload = await readJsonResponse(response);
       if (!response.ok) throw new Error(payload?.detail || 'TenantIQ could not import this assessment.');
 
       const uploaded = payload as AssessmentSummary;
@@ -233,7 +248,7 @@ export default function TenantIQAssistant() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: trimmed, assessment_id: activeAssessmentId }),
       });
-      const payload = await response.json();
+      const payload = await readJsonResponse(response);
       if (!response.ok) throw new Error(payload?.detail || 'TenantIQ assistant request failed.');
 
       const result = payload as AskResponse;

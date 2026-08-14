@@ -23,6 +23,7 @@ type ChatMessage = {
   content: string;
   route?: string;
   assessmentId?: string;
+  findingCount?: number;
 };
 
 const ASSISTANT_API = '/api/assistant';
@@ -58,15 +59,44 @@ function progressLabel(elapsed: number) {
   return 'Generating the final TenantIQ answer';
 }
 
-function formatAssistantAnswer(content: string) {
+function extractEvidence(content: string) {
+  const checkIds = Array.from(new Set(content.match(/\b(?:ENTRA|EXO|SPO|TEAMS|OD|ONEDRIVE|INTUNE|DEF|MDO|PUR)-[A-Z0-9]+-\d{3}\b/gi) || []));
   const lines = content.split(/\r?\n/);
+  const sourceHeadingIndex = lines.findIndex((line) => /^\s*Sources\s*:??\s*$/i.test(line.trim()));
+  const sources: string[] = [];
+
+  if (sourceHeadingIndex >= 0) {
+    for (const line of lines.slice(sourceHeadingIndex + 1)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (/^[A-Z][A-Za-z ]{2,}:?$/.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('\\')) break;
+      const cleaned = trimmed.replace(/^[-•]\s*/, '');
+      if (cleaned && !/^none\b/i.test(cleaned)) sources.push(cleaned);
+    }
+  }
+
+  return {
+    checkIds,
+    sources: Array.from(new Set(sources)),
+  };
+}
+
+function contentWithoutSources(content: string) {
+  const lines = content.split(/\r?\n/);
+  const sourceHeadingIndex = lines.findIndex((line) => /^\s*Sources\s*:??\s*$/i.test(line.trim()));
+  if (sourceHeadingIndex < 0) return content;
+  return lines.slice(0, sourceHeadingIndex).join('\n').trimEnd();
+}
+
+function formatAssistantAnswer(content: string) {
+  const lines = contentWithoutSources(content).split(/\r?\n/);
   return lines.map((line, index) => {
     const trimmed = line.trim();
     const isHeading =
       trimmed.length > 0 &&
       !trimmed.startsWith('-') &&
       !trimmed.startsWith('•') &&
-      (/^(Biggest problems|Why this matters|What should be fixed first|Recommended remediation|Sources|Priority|Next steps|Key findings)/i.test(trimmed) ||
+      (/^(Biggest problems|Why this matters|What should be fixed first|Recommended remediation|Priority|Next steps|Key findings)/i.test(trimmed) ||
         (trimmed.length <= 72 && !/[.!?]$/.test(trimmed) && index === 0));
 
     if (!trimmed) return <div key={index} style={{ height: 10 }} />;
@@ -74,6 +104,32 @@ function formatAssistantAnswer(content: string) {
     if (trimmed.startsWith('-') || trimmed.startsWith('•')) return <div key={index} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 6, margin: '4px 0' }}><span>•</span><span>{trimmed.replace(/^[-•]\s*/, '')}</span></div>;
     return <div key={index} style={{ margin: '4px 0' }}>{trimmed}</div>;
   });
+}
+
+function EvidencePanel({ message }: { message: ChatMessage }) {
+  const evidence = extractEvidence(message.content);
+  if (message.role !== 'assistant') return null;
+
+  const hasChecks = evidence.checkIds.length > 0;
+  const hasSources = evidence.sources.length > 0;
+  if (!hasChecks && !hasSources && !message.findingCount) return null;
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(86,160,255,.16)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: hasChecks || hasSources ? 10 : 0 }}>
+        <span style={{ color: '#8fc7ff', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Evidence & sources</span>
+        {message.findingCount ? <span style={{ borderRadius: 999, padding: '4px 8px', background: 'rgba(47,135,255,.11)', color: '#9dcbff', fontSize: 11, fontWeight: 700 }}>{message.findingCount} findings analyzed</span> : null}
+      </div>
+
+      {hasChecks && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: hasSources ? 10 : 0 }}>
+        {evidence.checkIds.map((checkId) => <span key={checkId} style={{ borderRadius: 8, padding: '5px 8px', border: '1px solid rgba(86,160,255,.22)', background: 'rgba(86,160,255,.06)', color: '#c6dcf7', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{checkId}</span>)}
+      </div>}
+
+      {hasSources && <div style={{ display: 'grid', gap: 6 }}>
+        {evidence.sources.map((source) => <div key={source} title={source} style={{ display: 'grid', gridTemplateColumns: '14px minmax(0,1fr)', gap: 7, alignItems: 'start', color: '#9ca8b8', fontSize: 12, lineHeight: 1.45 }}><span>↳</span><span style={{ overflowWrap: 'anywhere' }}>{source}</span></div>)}
+      </div>}
+    </div>
+  );
 }
 
 export default function TenantIQAssistant() {
@@ -187,6 +243,7 @@ export default function TenantIQAssistant() {
       if (!response.ok) throw new Error(payload?.detail || 'TenantIQ assistant request failed.');
 
       const result = payload as AskResponse;
+      const answeredAssessment = assessments.find((item) => item.assessment_id === result.assessment_id);
       setActiveAssessmentId(result.assessment_id);
       setMessages((current) => [...current, {
         id: `assistant-${Date.now()}`,
@@ -194,6 +251,7 @@ export default function TenantIQAssistant() {
         content: result.answer,
         route: result.route === 'specific_finding' ? 'Specific finding' : 'Tenant-wide insights',
         assessmentId: result.assessment_id,
+        findingCount: answeredAssessment?.finding_count,
       }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to reach the TenantIQ assistant service.');
@@ -255,6 +313,7 @@ export default function TenantIQAssistant() {
                 </div>}
               </div>
               <div style={{ lineHeight: 1.72, color: '#e7edf5', fontSize: 15 }}>{message.role === 'assistant' ? formatAssistantAnswer(message.content) : message.content}</div>
+              <EvidencePanel message={message} />
             </article>
           </div>)}
         </div>}

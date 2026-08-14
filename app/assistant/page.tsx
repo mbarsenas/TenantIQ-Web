@@ -4,13 +4,12 @@ import { auth, signOut } from '../../auth';
 
 export default async function AssistantPage() {
   const session = await auth();
-  const user = session?.user;
 
-  if (!user?.id) {
+  if (!session?.user?.id) {
     redirect('/signin');
   }
 
-  const signedInUser = user.name || user.email || 'TenantIQ user';
+  const signedInUser = session.user.name ?? session.user.email ?? 'TenantIQ user';
 
   return (
     <>

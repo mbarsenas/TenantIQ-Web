@@ -1,30 +1,12 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id';
+import { verifyUserPassword } from './lib/tenantiq-users';
 
 const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID?.trim();
 const microsoftConfigured = Boolean(
   process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim() && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET?.trim(),
 );
-
-function configuredUsers() {
-  const raw = process.env.TENANTIQ_LOCAL_USERS_JSON?.trim();
-  if (!raw) return [] as Array<{ email: string; password: string; name?: string }>;
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item) => item && typeof item.email === 'string' && typeof item.password === 'string')
-      .map((item) => ({
-        email: item.email.trim().toLowerCase(),
-        password: item.password,
-        name: typeof item.name === 'string' ? item.name.trim() : undefined,
-      }));
-  } catch {
-    return [];
-  }
-}
 
 const providers = [
   Credentials({
@@ -39,13 +21,13 @@ const providers = [
       const password = String(credentials?.password || '');
       if (!email || !password) return null;
 
-      const user = configuredUsers().find((candidate) => candidate.email === email && candidate.password === password);
+      const user = await verifyUserPassword(email, password);
       if (!user) return null;
 
       return {
-        id: `tenantiq:${user.email}`,
+        id: user.id,
         email: user.email,
-        name: user.name || user.email,
+        name: user.name,
       };
     },
   }),
@@ -62,6 +44,7 @@ if (microsoftConfigured) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET,
   providers,
   pages: {
     signIn: '/signin',

@@ -26,11 +26,15 @@ export async function getAuthenticatedCustomerId(): Promise<string> {
 
 export function buildRagIdentityHeaders(customerId: string): Record<string, string> {
   const secret = process.env.TENANTIQ_INTERNAL_API_SECRET?.trim();
+
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('TENANTIQ_INTERNAL_API_SECRET is required in production.');
     }
-    return { 'X-TenantIQ-Customer-ID': customerId };
+
+    return {
+      'X-TenantIQ-Customer-ID': customerId,
+    };
   }
 
   const signature = crypto.createHmac('sha256', secret).update(customerId).digest('hex');

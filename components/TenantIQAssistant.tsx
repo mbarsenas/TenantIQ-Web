@@ -39,6 +39,25 @@ function assessmentLabel(item: AssessmentSummary) {
   return `${name} · ${item.finding_count} findings`;
 }
 
+function progressForElapsed(elapsed: number) {
+  if (elapsed < 3) return 12;
+  if (elapsed < 8) return 28;
+  if (elapsed < 15) return 44;
+  if (elapsed < 25) return 58;
+  if (elapsed < 40) return 70;
+  if (elapsed < 60) return 82;
+  if (elapsed < 90) return 90;
+  return 94;
+}
+
+function progressLabel(elapsed: number) {
+  if (elapsed < 3) return 'Loading assessment context';
+  if (elapsed < 10) return 'Reviewing findings';
+  if (elapsed < 25) return 'Retrieving grounded evidence';
+  if (elapsed < 45) return 'Prioritizing risks and recommendations';
+  return 'Generating the final TenantIQ answer';
+}
+
 function formatAssistantAnswer(content: string) {
   const lines = content.split(/\r?\n/);
   return lines.map((line, index) => {
@@ -73,6 +92,8 @@ export default function TenantIQAssistant() {
   const hasConversation = messages.length > 0;
   const canSubmit = useMemo(() => Boolean(question.trim()) && !loading && Boolean(activeAssessmentId), [question, loading, activeAssessmentId]);
   const activeAssessment = useMemo(() => assessments.find((item) => item.assessment_id === activeAssessmentId), [assessments, activeAssessmentId]);
+  const progressPercent = progressForElapsed(elapsed);
+  const progressText = progressLabel(elapsed);
 
   async function refreshAssessments(preferredAssessmentId?: string) {
     setAssessmentsLoading(true);
@@ -238,7 +259,17 @@ export default function TenantIQAssistant() {
           </div>)}
         </div>}
 
-        {loading && <div style={{ marginBottom: 18, borderRadius: 14, border: '1px solid rgba(244,196,48,.24)', background: 'rgba(244,196,48,.07)', padding: 16, color: '#f4d35e' }}><div style={{ fontWeight: 800, marginBottom: 6 }}>TenantIQ is analyzing the assessment…</div><div style={{ color: '#d7c67a', fontSize: 14 }}>Retrieving grounded evidence and generating an answer. Elapsed: {elapsed}s</div></div>}
+        {loading && <div style={{ marginBottom: 18, borderRadius: 14, border: '1px solid rgba(244,196,48,.24)', background: 'rgba(244,196,48,.07)', padding: 16, color: '#f4d35e' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 9, flexWrap: 'wrap' }}>
+            <div style={{ fontWeight: 800 }}>TenantIQ is analyzing the assessment…</div>
+            <div style={{ fontSize: 13, color: '#d7c67a' }}>{progressPercent}% · {elapsed}s</div>
+          </div>
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} aria-label="TenantIQ analysis progress" style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: 'rgba(244,196,48,.12)', border: '1px solid rgba(244,196,48,.2)' }}>
+            <div style={{ height: '100%', width: `${progressPercent}%`, borderRadius: 999, background: 'linear-gradient(90deg,#f4c430,#ffd95a)', transition: 'width 600ms ease' }} />
+          </div>
+          <div style={{ color: '#d7c67a', fontSize: 14, marginTop: 9 }}>{progressText}</div>
+          {elapsed >= 45 && <div style={{ color: '#b6aa70', fontSize: 12, marginTop: 5 }}>Larger assessments can take over a minute while TenantIQ grounds the answer against assessment evidence.</div>}
+        </div>}
         {error && <div style={{ marginBottom: 18, borderRadius: 14, border: '1px solid rgba(255,90,90,.28)', background: 'rgba(255,70,70,.08)', padding: 16, color: '#ffaaaa' }}><strong>TenantIQ could not complete the request.</strong><div style={{ marginTop: 5 }}>{error}</div></div>}
 
         <form onSubmit={submit} style={{ background: 'rgba(8,22,40,.9)', border: '1px solid rgba(86,160,255,.24)', borderRadius: 18, padding: 22, boxShadow: '0 20px 60px rgba(0,0,0,.24)', position: hasConversation ? 'sticky' : 'static', bottom: 18 }}>

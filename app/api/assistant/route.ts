@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const RAG_API_BASE = process.env.TENANTIQ_RAG_API || 'http://127.0.0.1:8787';
+import { getTenantIQRagApiBase } from '../../../lib/tenantiq-rag';
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -11,8 +10,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: 'Invalid JSON request body.' }, { status: 400 });
   }
 
+  let ragApiBase: string;
   try {
-    const response = await fetch(`${RAG_API_BASE}/ask`, {
+    ragApiBase = getTenantIQRagApiBase();
+  } catch (error) {
+    return NextResponse.json(
+      {
+        detail:
+          error instanceof Error
+            ? error.message
+            : 'TenantIQ RAG backend configuration is invalid.',
+      },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const response = await fetch(`${ragApiBase}/ask`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

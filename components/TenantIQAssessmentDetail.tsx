@@ -76,7 +76,7 @@ export default function TenantIQAssessmentDetail({ assessmentId }: { assessmentI
   if (!payload) return null;
 
   const counts = payload.status_counts || {};
-  const askAssessment = `/assistant?assessment=${encodeURIComponent(assessmentId)}`;
+  const askAssessment = `/api/assistant/select-assessment?assessment=${encodeURIComponent(assessmentId)}`;
 
   return (
     <>
@@ -108,7 +108,7 @@ export default function TenantIQAssessmentDetail({ assessmentId }: { assessmentI
           const evidence = text(finding.evidence);
           const recommendation = text(finding.recommendation);
           const question = `Explain ${finding.check_id || finding.title || 'this finding'}, why it matters, and what needs to be fixed.`;
-          const askHref = `/assistant?assessment=${encodeURIComponent(assessmentId)}&question=${encodeURIComponent(question)}`;
+          const askHref = `/api/assistant/select-assessment?assessment=${encodeURIComponent(assessmentId)}&question=${encodeURIComponent(question)}`;
           return (
             <article key={`${id}-${index}`} id={finding.check_id || undefined} style={panelStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>

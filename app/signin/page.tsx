@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { signIn } from '../../auth';
+import { findUserByEmail } from '../../lib/tenantiq-users';
 
 export default async function SignInPage({
   searchParams,
@@ -7,8 +8,8 @@ export default async function SignInPage({
   searchParams: Promise<{ error?: string; created?: string }>;
 }) {
   const params = await searchParams;
-  const hasError = Boolean(params.error);
   const created = params.created === '1';
+  const error = params.error;
   const microsoftConfigured = Boolean(
     process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim() && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET?.trim(),
   );
@@ -16,8 +17,13 @@ export default async function SignInPage({
   async function signInWithTenantIQ(formData: FormData) {
     'use server';
 
-    const email = String(formData.get('email') || '').trim();
+    const email = String(formData.get('email') || '').trim().toLowerCase();
     const password = String(formData.get('password') || '');
+
+    const row = email ? await findUserByEmail(email) : null;
+    if (row && !row.email_verified) {
+      redirect('/signin?error=verify');
+    }
 
     const result = await signIn('tenantiq', {
       email,
@@ -32,6 +38,13 @@ export default async function SignInPage({
     redirect('/assistant');
   }
 
+  const errorMessage =
+    error === 'verify'
+      ? 'Verify your email before signing in. Use the verification link TenantIQ sent to your inbox.'
+      : error
+        ? 'The email or password was not accepted.'
+        : null;
+
   return (
     <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb', padding: 24 }}>
       <section style={{ width: 'min(460px,100%)', border: '1px solid rgba(86,160,255,.22)', borderRadius: 20, background: 'rgba(8,22,40,.82)', padding: 32, boxShadow: '0 24px 70px rgba(0,0,0,.28)' }}>
@@ -43,13 +56,13 @@ export default async function SignInPage({
 
         {created ? (
           <div style={{ marginBottom: 16, border: '1px solid rgba(74,222,128,.25)', background: 'rgba(74,222,128,.08)', color: '#86efac', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-            Your account was created. Check your email for the verification link, then sign in.
+            Your account was created. Check your email for the verification link before signing in.
           </div>
         ) : null}
 
-        {hasError ? (
+        {errorMessage ? (
           <div style={{ marginBottom: 16, border: '1px solid rgba(248,113,113,.28)', background: 'rgba(248,113,113,.08)', color: '#fca5a5', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-            The email or password was not accepted.
+            {errorMessage}
           </div>
         ) : null}
 

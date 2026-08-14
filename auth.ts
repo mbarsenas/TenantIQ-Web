@@ -84,11 +84,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = typeof token.userId === 'string' ? token.userId : token.sub || '';
-        session.user.tenantId = typeof token.tid === 'string' ? token.tid : '';
-        (session.user as { emailVerified?: boolean }).emailVerified = token.emailVerified === true;
-      }
+      const sessionUser = session.user as unknown as {
+        id?: string;
+        tenantId?: string;
+        emailVerified?: boolean;
+      };
+
+      sessionUser.id = typeof token.userId === 'string' ? token.userId : token.sub || '';
+      sessionUser.tenantId = typeof token.tid === 'string' ? token.tid : '';
+      sessionUser.emailVerified = token.emailVerified === true;
+
       return session;
     },
   },

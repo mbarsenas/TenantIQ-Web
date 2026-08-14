@@ -7,10 +7,10 @@ import { getTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 const reasonCopy: Record<string, string> = {
   no_purchase: 'TenantIQ could not find a matching TenantIQ purchase for this signed-in email address.',
   inactive: 'A TenantIQ subscription was found, but it is not currently active or trialing.',
-  not_fulfilled: 'An active TenantIQ subscription was found, but the license fulfillment record is not complete.',
-  stripe_unavailable: 'TenantIQ could not complete the Stripe entitlement lookup.',
+  not_fulfilled: 'An active TenantIQ subscription was found, but license fulfillment is not complete yet.',
+  stripe_unavailable: 'TenantIQ could not verify this license right now. Please try again shortly.',
   not_authenticated: 'TenantIQ could not determine the signed-in account.',
-  active: 'TenantIQ found an active entitlement. If you are seeing this page, return to the workspace.',
+  active: 'TenantIQ found an active entitlement. Return to the workspace.',
 };
 
 export default async function LicenseRequiredPage() {
@@ -21,7 +21,7 @@ export default async function LicenseRequiredPage() {
   if (entitlement.entitled) redirect('/workspace');
 
   const reason = entitlement.reason;
-  const diagnostic = reasonCopy[reason] || 'TenantIQ could not validate this account license.';
+  const message = reasonCopy[reason] || 'TenantIQ could not validate this account license.';
 
   return (
     <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
@@ -34,16 +34,8 @@ export default async function LicenseRequiredPage() {
             The workspace, stored assessments, and Knowledge Assistant are available to customers with an active, fulfilled TenantIQ subscription. Sign in with the email address used for your TenantIQ purchase.
           </p>
 
-          <div style={{ border: '1px solid rgba(244,196,48,.25)', background: 'rgba(244,196,48,.06)', borderRadius: 12, padding: '14px 16px', marginBottom: 24 }}>
-            <div style={{ color: '#f4d35e', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Entitlement diagnostic</div>
-            <div style={{ color: '#dce7f4', lineHeight: 1.55, fontSize: 14 }}>{diagnostic}</div>
-            <div style={{ color: '#7f93aa', fontSize: 12, marginTop: 7 }}>Reason code: <code>{reason}</code></div>
-            {entitlement.diagnosticCode ? (
-              <div style={{ color: '#9db0c5', fontSize: 12, marginTop: 5 }}>Stripe code: <code>{entitlement.diagnosticCode}</code></div>
-            ) : null}
-            {entitlement.diagnosticDetail ? (
-              <div style={{ color: '#c5d3e2', fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>{entitlement.diagnosticDetail}</div>
-            ) : null}
+          <div style={{ border: '1px solid rgba(244,196,48,.2)', background: 'rgba(244,196,48,.05)', borderRadius: 12, padding: '14px 16px', marginBottom: 24, color: '#dce7f4', lineHeight: 1.55, fontSize: 14 }}>
+            {message}
           </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

@@ -38,9 +38,7 @@ export default async function KnowledgePage() {
         <div style={{ marginBottom: 28 }}>
           <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ knowledge base</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,56px)', margin: '10px 0 12px', lineHeight: 1.05 }}>Microsoft 365 guidance, organized by workload.</h1>
-          <p style={{ margin: 0, color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, maxWidth: 820 }}>
-            TenantIQ uses its knowledge base to support assessment interpretation, remediation guidance, and validation context in the Knowledge Assistant.
-          </p>
+          <p style={{ margin: 0, color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, maxWidth: 820 }}>TenantIQ uses its knowledge base to support assessment interpretation, remediation guidance, and validation context in the Knowledge Assistant.</p>
         </div>
 
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
@@ -59,27 +57,26 @@ export default async function KnowledgePage() {
         <section id="exchange-guidance" style={{ marginTop: 28, border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 22 }}>
           <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Exchange Online knowledge</div>
           <h2 style={{ margin: '0 0 8px', fontSize: 27 }}>Assessment guidance</h2>
-          <p style={{ margin: '0 0 20px', color: '#9fb0c2', lineHeight: 1.6, fontSize: 14, maxWidth: 780 }}>
-            TenantIQ maintains check-specific Exchange Online guidance used to explain findings, remediation intent, and validation context. Start with a control below or open the Assistant with your assessment evidence.
-          </p>
+          <p style={{ margin: '0 0 20px', color: '#9fb0c2', lineHeight: 1.6, fontSize: 14, maxWidth: 780 }}>TenantIQ maintains check-specific Exchange Online guidance used to explain findings, remediation intent, and validation context. Start with a control below or open the Assistant with your assessment evidence.</p>
           <div style={{ display: 'grid', gap: 8 }}>
-            {exchangeArticles.map(([id, title, category]) => (
-              <div key={id} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,.7fr) minmax(180px,1.6fr) minmax(120px,1fr) auto', gap: 14, alignItems: 'center', borderTop: '1px solid rgba(86,160,255,.13)', padding: '13px 4px' }}>
-                <div style={{ color: '#79baff', fontSize: 12, fontWeight: 900 }}>{id}</div>
-                <div style={{ color: '#f2f6fb', fontSize: 14, fontWeight: 800 }}>{title}</div>
-                <div style={{ color: '#8fa4ba', fontSize: 12 }}>{category}</div>
-                <a href={`/assistant?finding=${encodeURIComponent(id)}`} style={{ color: '#78b8ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>Ask Assistant →</a>
-              </div>
-            ))}
+            {exchangeArticles.map(([id, title, category]) => {
+              const hasArticle = id === 'EXO-MF-003';
+              return (
+                <div key={id} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,.7fr) minmax(180px,1.6fr) minmax(120px,1fr) auto', gap: 14, alignItems: 'center', borderTop: '1px solid rgba(86,160,255,.13)', padding: '13px 4px' }}>
+                  <div style={{ color: '#79baff', fontSize: 12, fontWeight: 900 }}>{id}</div>
+                  <div style={{ color: '#f2f6fb', fontSize: 14, fontWeight: 800 }}>{title}</div>
+                  <div style={{ color: '#8fa4ba', fontSize: 12 }}>{category}</div>
+                  <a href={hasArticle ? '/knowledge/exchange/exo-mf-003' : `/assistant?finding=${encodeURIComponent(id)}`} style={{ color: '#78b8ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>{hasArticle ? 'Read article →' : 'Ask Assistant →'}</a>
+                </div>
+              );
+            })}
           </div>
         </section>
 
         <section style={{ marginTop: 24, border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 22 }}>
           <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>How to use it</div>
           <h2 style={{ margin: '0 0 10px', fontSize: 24 }}>Start with the assessment, then use the knowledge.</h2>
-          <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.6, fontSize: 14 }}>
-            Open a stored assessment, select a finding, and send it to the Assistant. TenantIQ combines that assessment evidence with relevant knowledge-base guidance so the answer stays grounded in the tenant data you selected.
-          </p>
+          <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.6, fontSize: 14 }}>Open a stored assessment, select a finding, and send it to the Assistant. TenantIQ combines that assessment evidence with relevant knowledge-base guidance so the answer stays grounded in the tenant data you selected.</p>
         </section>
       </div>
     </main>

@@ -7,11 +7,11 @@ export async function POST(request: NextRequest) {
   let identityHeaders: Record<string, string>;
   try {
     ragApiBase = getTenantIQRagApiBase();
-    identityHeaders = buildRagIdentityHeaders(getAuthenticatedCustomerId(request));
+    identityHeaders = buildRagIdentityHeaders(await getAuthenticatedCustomerId());
   } catch (error) {
     return NextResponse.json(
       { detail: error instanceof Error ? error.message : 'TenantIQ authentication or backend configuration is invalid.' },
-      { status: 503 },
+      { status: 401 },
     );
   }
 

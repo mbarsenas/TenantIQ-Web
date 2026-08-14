@@ -17,7 +17,7 @@ type ChatMessage = {
   assessmentId?: string;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_TENANTIQ_RAG_API || 'http://127.0.0.1:8787';
+const ASSISTANT_API = '/api/assistant';
 const starterQuestion = 'What are the biggest problems in this tenant and what should be fixed first?';
 
 export default function TenantIQAssistant() {
@@ -56,7 +56,7 @@ export default function TenantIQAssistant() {
     beginTimer();
 
     try {
-      const response = await fetch(`${API_BASE}/ask`, {
+      const response = await fetch(ASSISTANT_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: trimmed, assessment_id: activeAssessmentId || undefined }),
@@ -75,7 +75,7 @@ export default function TenantIQAssistant() {
         assessmentId: result.assessment_id,
       }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to reach the TenantIQ assistant API.');
+      setError(err instanceof Error ? err.message : 'Unable to reach the TenantIQ assistant service.');
     } finally {
       stopTimer();
       setLoading(false);

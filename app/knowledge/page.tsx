@@ -13,6 +13,19 @@ const workloads = [
   ['Microsoft Purview', 'Audit, retention, data governance, compliance, and information protection guidance.'],
 ] as const;
 
+const exchangeArticles = [
+  ['EXO-MF-001', 'Accepted Domains', 'Mail Flow'],
+  ['EXO-MF-002', 'Connectors', 'Mail Flow'],
+  ['EXO-MF-003', 'DKIM', 'Mail Authentication'],
+  ['EXO-MF-004', 'DMARC', 'Mail Authentication'],
+  ['EXO-MF-005', 'Remote Domains', 'Mail Flow'],
+  ['EXO-SEC-001', 'Anti-Spam Policies', 'Security'],
+  ['EXO-SEC-002', 'Authentication Policies', 'Authentication'],
+  ['EXO-SEC-003', 'External Forwarding', 'Security'],
+  ['EXO-SEC-004', 'Mailbox Auditing', 'Security'],
+  ['EXO-SEC-005', 'SMTP AUTH', 'Authentication'],
+] as const;
+
 export default async function KnowledgePage() {
   const { session, entitlement } = await requireTenantIQEntitlement();
   if (!session?.user?.id) redirect('/signin');
@@ -38,9 +51,27 @@ export default async function KnowledgePage() {
                 <h2 style={{ margin: '0 0 10px', fontSize: 21 }}>{name}</h2>
                 <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.55, fontSize: 14 }}>{description}</p>
               </div>
-              <a href="/assistant" style={{ marginTop: 18, color: '#78b8ff', fontSize: 13, fontWeight: 850, textDecoration: 'none' }}>Ask TenantIQ →</a>
+              <a href={name === 'Exchange Online' ? '#exchange-guidance' : '/assistant'} style={{ marginTop: 18, color: '#78b8ff', fontSize: 13, fontWeight: 850, textDecoration: 'none' }}>{name === 'Exchange Online' ? 'View guidance →' : 'Ask TenantIQ →'}</a>
             </article>
           ))}
+        </section>
+
+        <section id="exchange-guidance" style={{ marginTop: 28, border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 22 }}>
+          <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Exchange Online knowledge</div>
+          <h2 style={{ margin: '0 0 8px', fontSize: 27 }}>Assessment guidance</h2>
+          <p style={{ margin: '0 0 20px', color: '#9fb0c2', lineHeight: 1.6, fontSize: 14, maxWidth: 780 }}>
+            TenantIQ maintains check-specific Exchange Online guidance used to explain findings, remediation intent, and validation context. Start with a control below or open the Assistant with your assessment evidence.
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {exchangeArticles.map(([id, title, category]) => (
+              <div key={id} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,.7fr) minmax(180px,1.6fr) minmax(120px,1fr) auto', gap: 14, alignItems: 'center', borderTop: '1px solid rgba(86,160,255,.13)', padding: '13px 4px' }}>
+                <div style={{ color: '#79baff', fontSize: 12, fontWeight: 900 }}>{id}</div>
+                <div style={{ color: '#f2f6fb', fontSize: 14, fontWeight: 800 }}>{title}</div>
+                <div style={{ color: '#8fa4ba', fontSize: 12 }}>{category}</div>
+                <a href={`/assistant?finding=${encodeURIComponent(id)}`} style={{ color: '#78b8ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>Ask Assistant →</a>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section style={{ marginTop: 24, border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 22 }}>

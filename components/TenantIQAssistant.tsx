@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 type AskResponse = {
   assessment_id: string;
@@ -27,6 +27,7 @@ type ChatMessage = {
 
 const ASSISTANT_API = '/api/assistant';
 const ASSESSMENTS_API = '/api/assistant/assessments';
+const UPLOAD_API = '/api/assistant/assessments/upload';
 const starterQuestion = 'What are the biggest problems in this tenant and what should be fixed first?';
 
 function shortAssessmentId(value: string) {
@@ -49,18 +50,9 @@ function formatAssistantAnswer(content: string) {
       (/^(Biggest problems|Why this matters|What should be fixed first|Recommended remediation|Sources|Priority|Next steps|Key findings)/i.test(trimmed) ||
         (trimmed.length <= 72 && !/[.!?]$/.test(trimmed) && index === 0));
 
-    if (!trimmed) {
-      return <div key={index} style={{ height: 10 }} />;
-    }
-
-    if (isHeading) {
-      return <div key={index} style={{ marginTop: index === 0 ? 0 : 14, marginBottom: 6, fontWeight: 800, color: '#f4f7fb' }}>{trimmed}</div>;
-    }
-
-    if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
-      return <div key={index} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 6, margin: '4px 0' }}><span>•</span><span>{trimmed.replace(/^[-•]\s*/, '')}</span></div>;
-    }
-
+    if (!trimmed) return <div key={index} style={{ height: 10 }} />;
+    if (isHeading) return <div key={index} style={{ marginTop: index === 0 ? 0 : 14, marginBottom: 6, fontWeight: 800, color: '#f4f7fb' }}>{trimmed}</div>;
+    if (trimmed.startsWith('-') || trimmed.startsWith('•')) return <div key={index} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 6, margin: '4px 0' }}><span>•</span><span>{trimmed.replace(/^[-•]\s*/, '')}</span></div>;
     return <div key={index} style={{ margin: '4px 0' }}>{trimmed}</div>;
   });
 }
@@ -73,38 +65,72 @@ export default function TenantIQAssistant() {
   const [activeAssessmentId, setActiveAssessmentId] = useState('');
   const [assessments, setAssessments] = useState<AssessmentSummary[]>([]);
   const [assessmentsLoading, setAssessmentsLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasConversation = messages.length > 0;
   const canSubmit = useMemo(() => Boolean(question.trim()) && !loading && Boolean(activeAssessmentId), [question, loading, activeAssessmentId]);
-  const activeAssessment = useMemo(
-    () => assessments.find((item) => item.assessment_id === activeAssessmentId),
-    [assessments, activeAssessmentId],
-  );
+  const activeAssessment = useMemo(() => assessments.find((item) => item.assessment_id === activeAssessmentId), [assessments, activeAssessmentId]);
+
+  async function refreshAssessments(preferredAssessmentId?: string) {
+    setAssessmentsLoading(true);
+    try {
+      const response = await fetch(ASSESSMENTS_API, { cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ assessments.');
+      const items = Array.isArray(payload) ? (payload as AssessmentSummary[]) : [];
+      setAssessments(items);
+      if (preferredAssessmentId && items.some((item) => item.assessment_id === preferredAssessmentId)) {
+        setActiveAssessmentId(preferredAssessmentId);
+      } else if (items.length > 0) {
+        setActiveAssessmentId((current) => current && items.some((item) => item.assessment_id === current) ? current : items[0].assessment_id);
+      } else {
+        setActiveAssessmentId('');
+      }
+    } finally {
+      setAssessmentsLoading(false);
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false;
+    refreshAssessments().catch((err) => setError(err instanceof Error ? err.message : 'Unable to load TenantIQ assessments.'));
+  }, []);
 
-    async function loadAssessments() {
-      setAssessmentsLoading(true);
-      try {
-        const response = await fetch(ASSESSMENTS_API, { cache: 'no-store' });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ assessments.');
-        const items = Array.isArray(payload) ? (payload as AssessmentSummary[]) : [];
-        if (cancelled) return;
-        setAssessments(items);
-        if (items.length > 0) setActiveAssessmentId((current) => current || items[0].assessment_id);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load TenantIQ assessments.');
-      } finally {
-        if (!cancelled) setAssessmentsLoading(false);
-      }
+  async function uploadAssessment(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (extension !== 'csv' && extension !== 'json') {
+      setError('TenantIQ assessment uploads must be CSV or JSON files.');
+      return;
     }
 
-    loadAssessments();
-    return () => { cancelled = true; };
-  }, []);
+    setUploading(true);
+    setUploadStatus(`Uploading ${file.name}…`);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      const response = await fetch(UPLOAD_API, { method: 'POST', body: formData });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.detail || 'TenantIQ could not import this assessment.');
+
+      const uploaded = payload as AssessmentSummary;
+      await refreshAssessments(uploaded.assessment_id);
+      setMessages([]);
+      setQuestion(starterQuestion);
+      setUploadStatus(`Imported ${file.name} · ${uploaded.finding_count} findings`);
+    } catch (err) {
+      setUploadStatus('');
+      setError(err instanceof Error ? err.message : 'Unable to upload the TenantIQ assessment.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function beginTimer() {
     setElapsed(0);
@@ -136,7 +162,6 @@ export default function TenantIQAssistant() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: trimmed, assessment_id: activeAssessmentId }),
       });
-
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.detail || 'TenantIQ assistant request failed.');
 
@@ -175,28 +200,26 @@ export default function TenantIQAssistant() {
         <div style={{ marginTop: 28, marginBottom: 24 }}>
           <div style={{ color: '#6eb5ff', fontSize: 13, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ Knowledge Assistant</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,58px)', lineHeight: 1.05, margin: '10px 0 14px' }}>Ask questions about the assessment.</h1>
-          <p style={{ maxWidth: 760, color: '#aeb8c8', fontSize: 17, lineHeight: 1.65, margin: 0 }}>Read-only, grounded answers from TenantIQ assessment evidence and the TenantIQ knowledge base. The assistant does not make tenant changes.</p>
+          <p style={{ maxWidth: 760, color: '#aeb8c8', fontSize: 17, lineHeight: 1.65, margin: 0 }}>Upload a TenantIQ assessment, then ask read-only questions grounded in that assessment evidence and the TenantIQ knowledge base.</p>
         </div>
 
         <div style={{ marginBottom: 22, border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em' }}>Assessment context</div>
-              <div style={{ marginTop: 5, color: '#dfe8f4', fontWeight: 700 }}>
-                {activeAssessment ? assessmentLabel(activeAssessment) : assessmentsLoading ? 'Loading assessments…' : 'No assessment selected'}
-              </div>
+              <div style={{ marginTop: 5, color: '#dfe8f4', fontWeight: 700 }}>{activeAssessment ? assessmentLabel(activeAssessment) : assessmentsLoading ? 'Loading assessments…' : 'No assessment selected'}</div>
               {activeAssessmentId && <div title={activeAssessmentId} style={{ marginTop: 5, color: '#7f8b9a', fontSize: 12 }}>{shortAssessmentId(activeAssessmentId)}</div>}
+              {uploadStatus && <div style={{ marginTop: 8, color: '#86e1ad', fontSize: 13, fontWeight: 700 }}>{uploadStatus}</div>}
             </div>
-            <select
-              aria-label="Select TenantIQ assessment"
-              value={activeAssessmentId}
-              onChange={(event) => { setActiveAssessmentId(event.target.value); setMessages([]); setError(''); }}
-              disabled={loading || assessmentsLoading || assessments.length === 0}
-              style={{ minWidth: 320, maxWidth: '100%', borderRadius: 10, border: '1px solid rgba(86,160,255,.3)', background: '#081425', color: '#eaf2fb', padding: '11px 12px' }}
-            >
-              {assessments.length === 0 && <option value="">No stored assessments</option>}
-              {assessments.map((item) => <option key={item.assessment_id} value={item.assessment_id}>{assessmentLabel(item)}</option>)}
-            </select>
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select aria-label="Select TenantIQ assessment" value={activeAssessmentId} onChange={(event) => { setActiveAssessmentId(event.target.value); setMessages([]); setError(''); }} disabled={loading || uploading || assessmentsLoading || assessments.length === 0} style={{ minWidth: 300, maxWidth: '100%', borderRadius: 10, border: '1px solid rgba(86,160,255,.3)', background: '#081425', color: '#eaf2fb', padding: '11px 12px' }}>
+                {assessments.length === 0 && <option value="">No stored assessments</option>}
+                {assessments.map((item) => <option key={item.assessment_id} value={item.assessment_id}>{assessmentLabel(item)}</option>)}
+              </select>
+              <input ref={fileInputRef} type="file" accept=".csv,.json,text/csv,application/json" onChange={uploadAssessment} style={{ display: 'none' }} />
+              <button type="button" disabled={uploading || loading} onClick={() => fileInputRef.current?.click()} style={{ border: '1px solid rgba(86,160,255,.38)', borderRadius: 10, padding: '11px 14px', fontWeight: 800, background: 'rgba(47,135,255,.12)', color: '#b9d8ff', opacity: uploading ? .6 : 1 }}>{uploading ? 'Uploading…' : 'Upload assessment'}</button>
+            </div>
           </div>
         </div>
 
@@ -210,9 +233,7 @@ export default function TenantIQAssistant() {
                   {message.assessmentId && <span title={message.assessmentId} style={{ borderRadius: 999, padding: '5px 9px', background: 'rgba(255,255,255,.05)', color: '#9ca8b8', fontSize: 11 }}>Assessment loaded</span>}
                 </div>}
               </div>
-              <div style={{ lineHeight: 1.72, color: '#e7edf5', fontSize: 15 }}>
-                {message.role === 'assistant' ? formatAssistantAnswer(message.content) : message.content}
-              </div>
+              <div style={{ lineHeight: 1.72, color: '#e7edf5', fontSize: 15 }}>{message.role === 'assistant' ? formatAssistantAnswer(message.content) : message.content}</div>
             </article>
           </div>)}
         </div>}
@@ -222,10 +243,10 @@ export default function TenantIQAssistant() {
 
         <form onSubmit={submit} style={{ background: 'rgba(8,22,40,.9)', border: '1px solid rgba(86,160,255,.24)', borderRadius: 18, padding: 22, boxShadow: '0 20px 60px rgba(0,0,0,.24)', position: hasConversation ? 'sticky' : 'static', bottom: 18 }}>
           <label htmlFor="tenantiq-question" style={{ display: 'block', fontWeight: 750, marginBottom: 10 }}>{hasConversation ? 'Ask a follow-up' : 'Question'}</label>
-          <textarea id="tenantiq-question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSubmit) event.currentTarget.form?.requestSubmit(); } }} rows={hasConversation ? 3 : 5} disabled={loading || !activeAssessmentId} placeholder={activeAssessmentId ? 'Ask about risks, findings, evidence, or recommended remediation…' : 'Select an assessment to begin…'} style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box', borderRadius: 12, border: '1px solid rgba(139,149,165,.3)', background: '#081425', color: '#f5f8fc', padding: 16, font: 'inherit', lineHeight: 1.5, outline: 'none' }} />
+          <textarea id="tenantiq-question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSubmit) event.currentTarget.form?.requestSubmit(); } }} rows={hasConversation ? 3 : 5} disabled={loading || uploading || !activeAssessmentId} placeholder={activeAssessmentId ? 'Ask about risks, findings, evidence, or recommended remediation…' : 'Upload or select an assessment to begin…'} style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box', borderRadius: 12, border: '1px solid rgba(139,149,165,.3)', background: '#081425', color: '#f5f8fc', padding: 16, font: 'inherit', lineHeight: 1.5, outline: 'none' }} />
           <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button type="submit" disabled={!canSubmit} style={{ border: 0, borderRadius: 10, padding: '12px 18px', fontWeight: 800, background: '#2f87ff', color: 'white', opacity: canSubmit ? 1 : .55 }}>{loading ? 'Analyzing assessment…' : hasConversation ? 'Send follow-up' : 'Ask TenantIQ'}</button>
-            <button type="button" disabled={loading || !activeAssessmentId} onClick={() => setQuestion('Explain ENTRA-MFA-001 and tell me what needs to be fixed.')} style={{ border: '1px solid rgba(86,160,255,.3)', borderRadius: 10, padding: '12px 18px', fontWeight: 700, background: 'transparent', color: '#b9d8ff', opacity: activeAssessmentId ? 1 : .55 }}>Try MFA finding</button>
+            <button type="submit" disabled={!canSubmit || uploading} style={{ border: 0, borderRadius: 10, padding: '12px 18px', fontWeight: 800, background: '#2f87ff', color: 'white', opacity: canSubmit && !uploading ? 1 : .55 }}>{loading ? 'Analyzing assessment…' : hasConversation ? 'Send follow-up' : 'Ask TenantIQ'}</button>
+            <button type="button" disabled={loading || uploading || !activeAssessmentId} onClick={() => setQuestion('Explain ENTRA-MFA-001 and tell me what needs to be fixed.')} style={{ border: '1px solid rgba(86,160,255,.3)', borderRadius: 10, padding: '12px 18px', fontWeight: 700, background: 'transparent', color: '#b9d8ff', opacity: activeAssessmentId && !uploading ? 1 : .55 }}>Try MFA finding</button>
             <span style={{ color: '#7f8b9a', fontSize: 12 }}>Enter to send · Shift+Enter for a new line</span>
           </div>
         </form>

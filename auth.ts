@@ -22,13 +22,14 @@ const providers = [
       if (!email || !password) return null;
 
       const user = await verifyUserPassword(email, password);
-      if (!user) return null;
+      if (!user || !user.emailVerified) return null;
 
       return {
         id: user.id,
         email: user.email,
         name: user.name,
-      };
+        emailVerified: true,
+      } as never;
     },
   }),
 ];
@@ -55,6 +56,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user?.id) token.userId = user.id;
       if (user?.email) token.email = user.email;
       if (user?.name) token.name = user.name;
+      if ((user as { emailVerified?: boolean } | undefined)?.emailVerified) token.emailVerified = true;
 
       if (profile && account?.provider === 'microsoft-entra-id') {
         const oid = typeof profile.oid === 'string' ? profile.oid : undefined;
@@ -69,6 +71,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (oid) token.userId = oid;
         if (tid) token.tid = tid;
         if (email) token.email = email;
+        token.emailVerified = true;
       }
       return token;
     },
@@ -76,6 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = typeof token.userId === 'string' ? token.userId : token.sub || '';
         session.user.tenantId = typeof token.tid === 'string' ? token.tid : '';
+        (session.user as { emailVerified?: boolean }).emailVerified = token.emailVerified === true;
       }
       return session;
     },

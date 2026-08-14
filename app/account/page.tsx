@@ -3,6 +3,7 @@ import { auth } from '../../auth';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
 import { changePasswordForUser, createAuthToken, findUserById, updateUserName } from '../../lib/tenantiq-users';
 import { sendVerificationEmail } from '../../lib/tenantiq-email';
+import { getTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 
 export default async function AccountPage({
   searchParams,
@@ -15,6 +16,7 @@ export default async function AccountPage({
   const params = await searchParams;
   const nativeAccount = session.user.id.startsWith('tenantiq:');
   const user = nativeAccount ? await findUserById(session.user.id) : null;
+  const entitlement = await getTenantIQEntitlement(session.user.email);
 
   async function updateProfile(formData: FormData) {
     'use server';
@@ -70,7 +72,7 @@ export default async function AccountPage({
         <div style={{ marginBottom: 24 }}>
           <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ account</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,54px)', lineHeight: 1.05, margin: '10px 0 12px' }}>Manage your account.</h1>
-          <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.6, margin: 0 }}>Update your profile, password, and email verification status.</p>
+          <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.6, margin: 0 }}>Update your profile, license, password, and email verification status.</p>
         </div>
 
         {params.saved === '1' ? <Notice text="Profile updated." /> : null}
@@ -80,6 +82,31 @@ export default async function AccountPage({
         {errorMessage ? <Notice text={errorMessage} error /> : null}
 
         <section style={{ display: 'grid', gap: 18 }}>
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={headingStyle}>TenantIQ license</h2>
+                <div style={{ color: '#91a3b8', fontSize: 13, lineHeight: 1.55 }}>Your workspace access is based on the active TenantIQ subscription associated with this account.</div>
+              </div>
+              <span style={{ borderRadius: 999, padding: '6px 10px', fontSize: 11, fontWeight: 900, background: entitlement.entitled ? 'rgba(34,197,94,.12)' : 'rgba(248,113,113,.1)', color: entitlement.entitled ? '#86efac' : '#fca5a5', border: `1px solid ${entitlement.entitled ? 'rgba(34,197,94,.24)' : 'rgba(248,113,113,.22)'}` }}>{entitlement.entitled ? 'Active' : 'Not active'}</span>
+            </div>
+
+            {entitlement.entitled ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginTop: 18 }}>
+                <LicenseField label="Edition" value={entitlement.edition || 'TenantIQ'} />
+                <LicenseField label="Subscription status" value={entitlement.status || 'Active'} />
+                <LicenseField label="Licensed domain" value={entitlement.licensedDomain || 'Not specified'} />
+                <LicenseField label="Tenant allowance" value={entitlement.maxTenants ? `${entitlement.maxTenants} tenant${entitlement.maxTenants === '1' ? '' : 's'}` : 'Per subscription'} />
+                <LicenseField label="License expires" value={formatLicenseDate(entitlement.licenseExpiresAt)} />
+                <LicenseField label="License ID" value={entitlement.licenseId || 'Issued'} mono />
+              </div>
+            ) : (
+              <div style={{ marginTop: 16, border: '1px solid rgba(248,113,113,.18)', background: 'rgba(248,113,113,.06)', borderRadius: 10, padding: '12px 14px', color: '#fca5a5', fontSize: 13, lineHeight: 1.55 }}>
+                TenantIQ could not confirm an active workspace entitlement for this account.
+              </div>
+            )}
+          </div>
+
           <div style={cardStyle}>
             <h2 style={headingStyle}>Profile</h2>
             <div style={{ display: 'grid', gap: 12 }}>
@@ -121,6 +148,21 @@ export default async function AccountPage({
       </div>
     </main>
   );
+}
+
+function LicenseField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div style={{ border: '1px solid rgba(86,160,255,.12)', borderRadius: 10, padding: '12px 13px', background: 'rgba(4,14,27,.35)' }}>
+      <span style={labelStyle}>{label}</span>
+      <div style={{ ...valueStyle, fontFamily: mono ? 'ui-monospace,SFMono-Regular,Menlo,monospace' : undefined, wordBreak: 'break-word' }}>{value}</div>
+    </div>
+  );
+}
+
+function formatLicenseDate(value?: string) {
+  if (!value) return 'Per subscription';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
 function Notice({ text, error = false }: { text: string; error?: boolean }) {

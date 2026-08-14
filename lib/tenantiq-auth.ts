@@ -1,26 +1,27 @@
-import { NextRequest } from 'next/server';
 import crypto from 'node:crypto';
+import { auth } from '../auth';
 
 const DEV_CUSTOMER_ID = process.env.TENANTIQ_DEV_CUSTOMER_ID || 'local-dev';
-const AUTH_HEADER = 'x-tenantiq-authenticated-user';
 
 function normalizeCustomerId(value: string): string {
   const normalized = value.trim().toLowerCase();
   return normalized.replace(/[^a-z0-9._@+-]+/g, '-').replace(/^-+|-+$/g, '') || DEV_CUSTOMER_ID;
 }
 
-export function getAuthenticatedCustomerId(request: NextRequest): string {
-  const trustedUser = request.headers.get(AUTH_HEADER)?.trim();
+export async function getAuthenticatedCustomerId(): Promise<string> {
+  const session = await auth();
+  const userId = session?.user?.id?.trim();
+  const tenantId = session?.user?.tenantId?.trim();
 
-  if (trustedUser) {
-    return normalizeCustomerId(trustedUser);
+  if (userId && tenantId) {
+    return normalizeCustomerId(`${tenantId}:${userId}`);
   }
 
   if (process.env.NODE_ENV !== 'production') {
     return normalizeCustomerId(DEV_CUSTOMER_ID);
   }
 
-  throw new Error('TenantIQ authentication is required. No trusted authenticated user identity was supplied by the server authentication layer.');
+  throw new Error('TenantIQ authentication is required. Sign in before accessing customer assessment data.');
 }
 
 export function buildRagIdentityHeaders(customerId: string): Record<string, string> {

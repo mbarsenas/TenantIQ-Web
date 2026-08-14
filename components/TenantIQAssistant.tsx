@@ -38,6 +38,33 @@ function assessmentLabel(item: AssessmentSummary) {
   return `${name} · ${item.finding_count} findings`;
 }
 
+function formatAssistantAnswer(content: string) {
+  const lines = content.split(/\r?\n/);
+  return lines.map((line, index) => {
+    const trimmed = line.trim();
+    const isHeading =
+      trimmed.length > 0 &&
+      !trimmed.startsWith('-') &&
+      !trimmed.startsWith('•') &&
+      (/^(Biggest problems|Why this matters|What should be fixed first|Recommended remediation|Sources|Priority|Next steps|Key findings)/i.test(trimmed) ||
+        (trimmed.length <= 72 && !/[.!?]$/.test(trimmed) && index === 0));
+
+    if (!trimmed) {
+      return <div key={index} style={{ height: 10 }} />;
+    }
+
+    if (isHeading) {
+      return <div key={index} style={{ marginTop: index === 0 ? 0 : 14, marginBottom: 6, fontWeight: 800, color: '#f4f7fb' }}>{trimmed}</div>;
+    }
+
+    if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
+      return <div key={index} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 6, margin: '4px 0' }}><span>•</span><span>{trimmed.replace(/^[-•]\s*/, '')}</span></div>;
+    }
+
+    return <div key={index} style={{ margin: '4px 0' }}>{trimmed}</div>;
+  });
+}
+
 export default function TenantIQAssistant() {
   const [question, setQuestion] = useState(starterQuestion);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -49,7 +76,7 @@ export default function TenantIQAssistant() {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasConversation = messages.length > 0;
-  const canSubmit = useMemo(() => Boolean(question.trim()) && !loading, [question, loading]);
+  const canSubmit = useMemo(() => Boolean(question.trim()) && !loading && Boolean(activeAssessmentId), [question, loading, activeAssessmentId]);
   const activeAssessment = useMemo(
     () => assessments.find((item) => item.assessment_id === activeAssessmentId),
     [assessments, activeAssessmentId],
@@ -95,7 +122,7 @@ export default function TenantIQAssistant() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     const trimmed = question.trim();
-    if (!trimmed || loading) return;
+    if (!trimmed || loading || !activeAssessmentId) return;
 
     setMessages((current) => [...current, { id: `user-${Date.now()}`, role: 'user', content: trimmed }]);
     setQuestion('');
@@ -107,7 +134,7 @@ export default function TenantIQAssistant() {
       const response = await fetch(ASSISTANT_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed, assessment_id: activeAssessmentId || undefined }),
+        body: JSON.stringify({ question: trimmed, assessment_id: activeAssessmentId }),
       });
 
       const payload = await response.json();
@@ -183,7 +210,9 @@ export default function TenantIQAssistant() {
                   {message.assessmentId && <span title={message.assessmentId} style={{ borderRadius: 999, padding: '5px 9px', background: 'rgba(255,255,255,.05)', color: '#9ca8b8', fontSize: 11 }}>Assessment loaded</span>}
                 </div>}
               </div>
-              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.72, color: '#e7edf5', fontSize: 15 }}>{message.content}</div>
+              <div style={{ lineHeight: 1.72, color: '#e7edf5', fontSize: 15 }}>
+                {message.role === 'assistant' ? formatAssistantAnswer(message.content) : message.content}
+              </div>
             </article>
           </div>)}
         </div>}
@@ -193,10 +222,10 @@ export default function TenantIQAssistant() {
 
         <form onSubmit={submit} style={{ background: 'rgba(8,22,40,.9)', border: '1px solid rgba(86,160,255,.24)', borderRadius: 18, padding: 22, boxShadow: '0 20px 60px rgba(0,0,0,.24)', position: hasConversation ? 'sticky' : 'static', bottom: 18 }}>
           <label htmlFor="tenantiq-question" style={{ display: 'block', fontWeight: 750, marginBottom: 10 }}>{hasConversation ? 'Ask a follow-up' : 'Question'}</label>
-          <textarea id="tenantiq-question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSubmit) event.currentTarget.form?.requestSubmit(); } }} rows={hasConversation ? 3 : 5} disabled={loading} placeholder="Ask about risks, findings, evidence, or recommended remediation…" style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box', borderRadius: 12, border: '1px solid rgba(139,149,165,.3)', background: '#081425', color: '#f5f8fc', padding: 16, font: 'inherit', lineHeight: 1.5, outline: 'none' }} />
+          <textarea id="tenantiq-question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSubmit) event.currentTarget.form?.requestSubmit(); } }} rows={hasConversation ? 3 : 5} disabled={loading || !activeAssessmentId} placeholder={activeAssessmentId ? 'Ask about risks, findings, evidence, or recommended remediation…' : 'Select an assessment to begin…'} style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box', borderRadius: 12, border: '1px solid rgba(139,149,165,.3)', background: '#081425', color: '#f5f8fc', padding: 16, font: 'inherit', lineHeight: 1.5, outline: 'none' }} />
           <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             <button type="submit" disabled={!canSubmit} style={{ border: 0, borderRadius: 10, padding: '12px 18px', fontWeight: 800, background: '#2f87ff', color: 'white', opacity: canSubmit ? 1 : .55 }}>{loading ? 'Analyzing assessment…' : hasConversation ? 'Send follow-up' : 'Ask TenantIQ'}</button>
-            <button type="button" disabled={loading} onClick={() => setQuestion('Explain ENTRA-MFA-001 and tell me what needs to be fixed.')} style={{ border: '1px solid rgba(86,160,255,.3)', borderRadius: 10, padding: '12px 18px', fontWeight: 700, background: 'transparent', color: '#b9d8ff' }}>Try MFA finding</button>
+            <button type="button" disabled={loading || !activeAssessmentId} onClick={() => setQuestion('Explain ENTRA-MFA-001 and tell me what needs to be fixed.')} style={{ border: '1px solid rgba(86,160,255,.3)', borderRadius: 10, padding: '12px 18px', fontWeight: 700, background: 'transparent', color: '#b9d8ff', opacity: activeAssessmentId ? 1 : .55 }}>Try MFA finding</button>
             <span style={{ color: '#7f8b9a', fontSize: 12 }}>Enter to send · Shift+Enter for a new line</span>
           </div>
         </form>

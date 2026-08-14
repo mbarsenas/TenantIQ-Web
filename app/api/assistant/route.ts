@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantIQRagApiBase } from '../../../lib/tenantiq-rag';
 
+const DEFAULT_CUSTOMER_ID = process.env.TENANTIQ_DEFAULT_CUSTOMER_ID?.trim() || 'local-dev';
+
+function customerId(request: NextRequest): string {
+  return request.headers.get('x-tenantiq-customer-id')?.trim() || DEFAULT_CUSTOMER_ID;
+}
+
 export async function POST(request: NextRequest) {
   let body: unknown;
 
@@ -28,7 +34,10 @@ export async function POST(request: NextRequest) {
   try {
     const response = await fetch(`${ragApiBase}/ask`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TenantIQ-Customer-ID': customerId(request),
+      },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

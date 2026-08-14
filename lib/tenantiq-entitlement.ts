@@ -6,6 +6,10 @@ export type TenantIQEntitlement = {
   edition?: string;
   subscriptionId?: string;
   status?: string;
+  licenseId?: string;
+  licenseExpiresAt?: string;
+  licensedDomain?: string;
+  maxTenants?: string;
   diagnosticCode?: string;
   diagnosticDetail?: string;
 };
@@ -119,6 +123,10 @@ function entitlementFromSubscription(subscription: any): TenantIQEntitlement | n
     edition: metadata.tenantiq_edition || metadata.edition || 'TenantIQ',
     subscriptionId: subscription.id,
     status: subscription.status,
+    licenseId: metadata.tenantiq_license_id || undefined,
+    licenseExpiresAt: metadata.tenantiq_license_expires_at || undefined,
+    licensedDomain: metadata.tenantiq_license_domain || metadata.tenantiq_customer_domain || undefined,
+    maxTenants: metadata.tenantiq_max_tenants || undefined,
   };
 }
 

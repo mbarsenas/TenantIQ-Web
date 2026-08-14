@@ -72,6 +72,7 @@ export default function TenantIQAssessments() {
             const workload = workloadFromName(name);
             const imported = item.imported_at ? new Date(item.imported_at).toLocaleString() : 'Import time unavailable';
             const validated = item.metadata?.validated === true;
+            const assistantHref = `/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment_id)}`;
             return (
               <article key={item.assessment_id} style={cardStyle}>
                 <div style={{ minWidth: 0 }}>
@@ -87,7 +88,7 @@ export default function TenantIQAssessments() {
                   <div title={item.assessment_id} style={{ marginTop: 8, color: '#63758a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, overflowWrap: 'anywhere' }}>{item.assessment_id}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <a href="/assistant" style={primaryLinkStyle}>Open Assistant</a>
+                  <a href={assistantHref} style={primaryLinkStyle}>Open in Assistant</a>
                 </div>
               </article>
             );

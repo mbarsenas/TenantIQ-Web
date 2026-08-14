@@ -12,12 +12,11 @@ function stripeSecret() {
   return process.env.STRIPE_SECRET_KEY?.trim() || '';
 }
 
-async function stripeGet(path: string, query: URLSearchParams) {
+async function stripeGet(path: string, query?: URLSearchParams) {
   const secret = stripeSecret();
   if (!secret) throw new Error('STRIPE_SECRET_KEY is not configured.');
-
   const url = new URL(`https://api.stripe.com/v1/${path}`);
-  url.search = query.toString();
+  if (query) url.search = query.toString();
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${secret}` },
     cache: 'no-store',
@@ -27,32 +26,36 @@ async function stripeGet(path: string, query: URLSearchParams) {
   return payload;
 }
 
+async function stripeGetOptional(path: string, query?: URLSearchParams) {
+  try {
+    return await stripeGet(path, query);
+  } catch (error) {
+    console.warn(`[TenantIQ entitlement] Optional Stripe lookup failed for ${path}:`, error);
+    return null;
+  }
+}
+
 function isUsableSubscription(subscription: any) {
   return ['active', 'trialing'].includes(String(subscription?.status || '').toLowerCase());
 }
 
 function isTenantIQSubscription(subscription: any) {
   const metadata = subscription?.metadata || {};
-  return (
-    String(metadata.tenantiq_product || '').toLowerCase() === 'tenantiq' ||
-    Boolean(metadata.tenantiq_edition || metadata.edition || metadata.tenantiq_license_id)
+  return String(metadata.tenantiq_product || '').toLowerCase() === 'tenantiq' || Boolean(
+    metadata.tenantiq_edition || metadata.edition || metadata.tenantiq_license_id || metadata.tenantiq_checkout_session_id
   );
 }
 
 function isFulfilled(subscription: any) {
   const metadata = subscription?.metadata || {};
-  return (
-    metadata.tenantiq_fulfillment_status === 'license_issued' ||
+  return metadata.tenantiq_fulfillment_status === 'license_issued' ||
     metadata.tenantiq_workspace_access === 'enabled' ||
-    Boolean(metadata.tenantiq_license_id && metadata.tenantiq_license_issued_at)
-  );
+    metadata.tenantiq_delivery_status === 'download_ready' ||
+    Boolean(metadata.tenantiq_license_id && metadata.tenantiq_license_issued_at);
 }
 
 function entitlementFromSubscription(subscription: any): TenantIQEntitlement | null {
-  if (!isTenantIQSubscription(subscription) || !isUsableSubscription(subscription) || !isFulfilled(subscription)) {
-    return null;
-  }
-
+  if (!isTenantIQSubscription(subscription) || !isUsableSubscription(subscription) || !isFulfilled(subscription)) return null;
   const metadata = subscription.metadata || {};
   return {
     entitled: true,
@@ -69,22 +72,34 @@ async function subscriptionsForCustomer(customerId: string) {
   return Array.isArray(payload?.data) ? payload.data : [];
 }
 
+async function customersForEmail(email: string) {
+  const customersById = new Map<string, any>();
+  const directPayload = await stripeGet('customers', new URLSearchParams({ email, limit: '100' }));
+  for (const customer of Array.isArray(directPayload?.data) ? directPayload.data : []) {
+    if (customer?.id) customersById.set(customer.id, customer);
+  }
+
+  const metadataQuery = new URLSearchParams();
+  metadataQuery.set('query', `metadata['tenantiq_email']:'${email.replace(/'/g, "\\'")}'`);
+  metadataQuery.set('limit', '100');
+  const metadataPayload = await stripeGetOptional('customers/search', metadataQuery);
+  for (const customer of Array.isArray(metadataPayload?.data) ? metadataPayload.data : []) {
+    if (customer?.id) customersById.set(customer.id, customer);
+  }
+  return [...customersById.values()];
+}
+
 async function subscriptionsForPurchaseEmail(email: string) {
-  // Fulfillment persists the Checkout email directly on the subscription as
-  // tenantiq_customer_email. This is a more reliable entitlement join than
-  // depending exclusively on Stripe Customer.email, which may be blank or
-  // differ for older/test Checkout customers.
   const query = new URLSearchParams();
   query.set('query', `metadata['tenantiq_customer_email']:'${email.replace(/'/g, "\\'")}'`);
   query.set('limit', '100');
-  const payload = await stripeGet('subscriptions/search', query);
+  const payload = await stripeGetOptional('subscriptions/search', query);
   return Array.isArray(payload?.data) ? payload.data : [];
 }
 
 export async function getTenantIQEntitlement(email?: string | null): Promise<TenantIQEntitlement> {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail) return { entitled: false, reason: 'not_authenticated' };
-
   if (!stripeSecret()) {
     if (process.env.NODE_ENV !== 'production') return { entitled: true, reason: 'active', edition: 'Development' };
     return { entitled: false, reason: 'stripe_unavailable' };
@@ -92,21 +107,21 @@ export async function getTenantIQEntitlement(email?: string | null): Promise<Ten
 
   try {
     const subscriptionsById = new Map<string, any>();
-
-    const customerQuery = new URLSearchParams({ email: normalizedEmail, limit: '100' });
-    const customersPayload = await stripeGet('customers', customerQuery);
-    const customers = Array.isArray(customersPayload?.data) ? customersPayload.data : [];
+    const customers = await customersForEmail(normalizedEmail);
 
     for (const customer of customers) {
       if (!customer?.id) continue;
       for (const subscription of await subscriptionsForCustomer(customer.id)) {
         if (subscription?.id) subscriptionsById.set(subscription.id, subscription);
       }
+
+      const latestSubscriptionId = String(customer?.metadata?.tenantiq_latest_subscription_id || '').trim();
+      if (latestSubscriptionId && !subscriptionsById.has(latestSubscriptionId)) {
+        const latest = await stripeGetOptional(`subscriptions/${encodeURIComponent(latestSubscriptionId)}`);
+        if (latest?.id) subscriptionsById.set(latest.id, latest);
+      }
     }
 
-    // Also join on the purchase email written by the TenantIQ Checkout
-    // webhook. This fixes valid fulfilled purchases whose Stripe Customer
-    // record does not have the same top-level email value.
     for (const subscription of await subscriptionsForPurchaseEmail(normalizedEmail)) {
       if (subscription?.id) subscriptionsById.set(subscription.id, subscription);
     }
@@ -116,13 +131,11 @@ export async function getTenantIQEntitlement(email?: string | null): Promise<Ten
 
     let sawTenantIQ = false;
     let sawUsable = false;
-
     for (const subscription of subscriptions) {
       if (!isTenantIQSubscription(subscription)) continue;
       sawTenantIQ = true;
       if (!isUsableSubscription(subscription)) continue;
       sawUsable = true;
-
       const entitlement = entitlementFromSubscription(subscription);
       if (entitlement) return entitlement;
     }
@@ -138,7 +151,9 @@ export async function getTenantIQEntitlement(email?: string | null): Promise<Ten
 
 export async function requireTenantIQEntitlement() {
   const session = await auth();
-  if (!session?.user?.id) return { session: null, entitlement: { entitled: false, reason: 'not_authenticated' } as TenantIQEntitlement };
+  if (!session?.user?.id) {
+    return { session: null, entitlement: { entitled: false, reason: 'not_authenticated' } as TenantIQEntitlement };
+  }
   const entitlement = await getTenantIQEntitlement(session.user.email);
   return { session, entitlement };
 }

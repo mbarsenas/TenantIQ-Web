@@ -1,4 +1,4 @@
-import { AuthError } from 'next-auth';
+import { redirect } from 'next/navigation';
 import { signIn } from '../../auth';
 
 export default async function SignInPage({
@@ -8,6 +8,28 @@ export default async function SignInPage({
 }) {
   const params = await searchParams;
   const hasError = Boolean(params.error);
+  const microsoftConfigured = Boolean(
+    process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim() && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET?.trim(),
+  );
+
+  async function signInWithTenantIQ(formData: FormData) {
+    'use server';
+
+    const email = String(formData.get('email') || '').trim();
+    const password = String(formData.get('password') || '');
+
+    const result = await signIn('tenantiq', {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (!result || result.error) {
+      redirect('/signin?error=credentials');
+    }
+
+    redirect('/assistant');
+  }
 
   return (
     <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb', padding: 24 }}>
@@ -24,24 +46,7 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        <form
-          action={async (formData) => {
-            'use server';
-            try {
-              await signIn('tenantiq', {
-                email: String(formData.get('email') || ''),
-                password: String(formData.get('password') || ''),
-                redirectTo: '/assistant',
-              });
-            } catch (error) {
-              if (error instanceof AuthError) {
-                await signIn('tenantiq', { redirectTo: '/signin?error=credentials' });
-              }
-              throw error;
-            }
-          }}
-          style={{ display: 'grid', gap: 12 }}
-        >
+        <form action={signInWithTenantIQ} style={{ display: 'grid', gap: 12 }}>
           <label style={{ display: 'grid', gap: 6, color: '#cbd7e7', fontSize: 13, fontWeight: 700 }}>
             Email
             <input name="email" type="email" autoComplete="email" required style={{ border: '1px solid rgba(86,160,255,.26)', borderRadius: 10, background: '#081425', color: '#f3f6fb', padding: '12px 13px', outline: 'none' }} />
@@ -55,25 +60,29 @@ export default async function SignInPage({
           </button>
         </form>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 16px', color: '#66768a', fontSize: 12 }}>
-          <span style={{ height: 1, background: 'rgba(86,160,255,.16)', flex: 1 }} />
-          Optional
-          <span style={{ height: 1, background: 'rgba(86,160,255,.16)', flex: 1 }} />
-        </div>
+        {microsoftConfigured ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 16px', color: '#66768a', fontSize: 12 }}>
+              <span style={{ height: 1, background: 'rgba(86,160,255,.16)', flex: 1 }} />
+              Optional
+              <span style={{ height: 1, background: 'rgba(86,160,255,.16)', flex: 1 }} />
+            </div>
 
-        <form
-          action={async () => {
-            'use server';
-            await signIn('microsoft-entra-id', { redirectTo: '/assistant' });
-          }}
-        >
-          <button type="submit" style={{ width: '100%', border: '1px solid rgba(86,160,255,.28)', borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 800, background: 'transparent', color: '#c8ddf7', cursor: 'pointer' }}>
-            Continue with Microsoft
-          </button>
-        </form>
+            <form
+              action={async () => {
+                'use server';
+                await signIn('microsoft-entra-id', { redirectTo: '/assistant' });
+              }}
+            >
+              <button type="submit" style={{ width: '100%', border: '1px solid rgba(86,160,255,.28)', borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 800, background: 'transparent', color: '#c8ddf7', cursor: 'pointer' }}>
+                Continue with Microsoft
+              </button>
+            </form>
+          </>
+        ) : null}
 
         <p style={{ margin: '16px 0 0', color: '#748093', fontSize: 12, lineHeight: 1.5 }}>
-          Native TenantIQ accounts are configured by the TenantIQ service. Microsoft sign-in remains optional.
+          Native TenantIQ accounts are configured by the TenantIQ service.
         </p>
       </section>
     </main>

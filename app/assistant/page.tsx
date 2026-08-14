@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import TenantIQAssistant from '../../components/TenantIQAssistant';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
+import TenantIQAssistantPrefill from '../../components/TenantIQAssistantPrefill';
 import { auth } from '../../auth';
 
 export default async function AssistantPage() {
@@ -10,6 +11,7 @@ export default async function AssistantPage() {
   return (
     <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
       <TenantIQAppNav active="assistant" />
+      <TenantIQAssistantPrefill />
       <TenantIQAssistant />
     </main>
   );

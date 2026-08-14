@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
+import TenantIQWorkspaceDashboard from '../../components/TenantIQWorkspaceDashboard';
 
 export default async function WorkspacePage() {
   const session = await auth();
@@ -15,8 +16,10 @@ export default async function WorkspacePage() {
         <div style={{ marginBottom: 28 }}>
           <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ workspace</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,54px)', lineHeight: 1.05, margin: '10px 0 12px' }}>Welcome, {name}.</h1>
-          <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, margin: 0, maxWidth: 720 }}>Your workspace brings together stored assessments, the Knowledge Assistant, and account management.</p>
+          <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, margin: 0, maxWidth: 720 }}>Your workspace brings together current assessment posture, stored assessments, the Knowledge Assistant, and account management.</p>
         </div>
+
+        <TenantIQWorkspaceDashboard />
 
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16 }}>
           <WorkspaceCard title="Assessments" text="Review the assessments stored in your TenantIQ workspace and open them in the assistant." href="/assessments" action="View assessments" />

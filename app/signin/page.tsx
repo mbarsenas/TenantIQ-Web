@@ -60,6 +60,10 @@ export default async function SignInPage({
           </button>
         </form>
 
+        <p style={{ margin: '16px 0 0', color: '#95a3b5', fontSize: 13 }}>
+          New to TenantIQ? <a href="/signup" style={{ color: '#6eb5ff', fontWeight: 700 }}>Create an account</a>
+        </p>
+
         {microsoftConfigured ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 16px', color: '#66768a', fontSize: 12 }}>
@@ -80,10 +84,6 @@ export default async function SignInPage({
             </form>
           </>
         ) : null}
-
-        <p style={{ margin: '16px 0 0', color: '#748093', fontSize: 12, lineHeight: 1.5 }}>
-          Native TenantIQ accounts are configured by the TenantIQ service.
-        </p>
       </section>
     </main>
   );

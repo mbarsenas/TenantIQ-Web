@@ -11,11 +11,13 @@ function normalizeCustomerId(value: string): string {
 
 export async function getAuthenticatedCustomerId(): Promise<string> {
   const session = await auth();
-  const userId = session?.user?.id?.trim();
-  const tenantId = session?.user?.tenantId?.trim();
+  const user = session?.user;
+  const userId = user?.id?.trim();
+  const tenantId = user?.tenantId?.trim();
+  const email = user?.email?.trim() || '';
 
   if (userId) {
-    const entitlement = await getTenantIQEntitlement(session.user.email);
+    const entitlement = await getTenantIQEntitlement(email);
     if (!entitlement.entitled) {
       throw new Error('An active TenantIQ license is required to access assessments and the Knowledge Assistant.');
     }

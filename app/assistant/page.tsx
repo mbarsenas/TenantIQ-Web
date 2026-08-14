@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import TenantIQAssistant from '../../components/TenantIQAssistant';
-import { auth } from '../../auth';
+import { auth, signOut } from '../../auth';
 
 export default async function AssistantPage() {
   const session = await auth();
@@ -8,5 +8,24 @@ export default async function AssistantPage() {
     redirect('/signin');
   }
 
-  return <TenantIQAssistant signedInUser={session.user.name || session.user.email || undefined} />;
+  const signedInUser = session.user.name || session.user.email || 'TenantIQ user';
+
+  return (
+    <>
+      <div style={{ position: 'fixed', top: 18, right: 22, zIndex: 30, display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px', border: '1px solid rgba(86,160,255,.18)', borderRadius: 12, background: 'rgba(8,22,40,.92)', backdropFilter: 'blur(12px)' }}>
+        <span style={{ color: '#9fb2c8', fontSize: 12 }}>Signed in as {signedInUser}</span>
+        <form
+          action={async () => {
+            'use server';
+            await signOut({ redirectTo: '/signin' });
+          }}
+        >
+          <button type="submit" style={{ border: '1px solid rgba(86,160,255,.28)', borderRadius: 9, padding: '7px 10px', background: 'transparent', color: '#c8ddf7', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+            Sign out
+          </button>
+        </form>
+      </div>
+      <TenantIQAssistant signedInUser={signedInUser} />
+    </>
+  );
 }

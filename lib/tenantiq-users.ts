@@ -67,13 +67,28 @@ export async function ensureUserSchema() {
   );
 }
 
+function bareUserId(value: string) {
+  return value.startsWith('tenantiq:') ? value.slice('tenantiq:'.length) : value;
+}
+
 export async function findUserByEmail(email: string) {
   await ensureUserSchema();
   const normalized = email.trim().toLowerCase();
   const { rows } = await authPool.query(
-    `SELECT id, email, name, password_hash, email_verified, failed_login_attempts, locked_until
+    `SELECT id, email, name, password_hash, email_verified, failed_login_attempts, locked_until, last_login_at, created_at
      FROM tenantiq_users WHERE email = $1 LIMIT 1`,
     [normalized],
+  );
+  return rows[0] || null;
+}
+
+export async function findUserById(userId: string) {
+  await ensureUserSchema();
+  const id = bareUserId(userId);
+  const { rows } = await authPool.query(
+    `SELECT id, email, name, email_verified, failed_login_attempts, locked_until, last_login_at, created_at, updated_at
+     FROM tenantiq_users WHERE id = $1 LIMIT 1`,
+    [id],
   );
   return rows[0] || null;
 }
@@ -151,6 +166,39 @@ export async function createUser(input: { email: string; password: string; name:
   };
 }
 
+export async function updateUserName(userId: string, name: string) {
+  await ensureUserSchema();
+  const id = bareUserId(userId);
+  const cleanName = name.trim();
+  if (!cleanName) return false;
+  const result = await authPool.query(
+    `UPDATE tenantiq_users SET name = $1, updated_at = NOW() WHERE id = $2`,
+    [cleanName, id],
+  );
+  return (result.rowCount || 0) > 0;
+}
+
+export async function changePasswordForUser(userId: string, currentPassword: string, newPassword: string) {
+  await ensureUserSchema();
+  if (newPassword.length < 12) return { ok: false, reason: 'weak' as const };
+  const id = bareUserId(userId);
+  const { rows } = await authPool.query(`SELECT password_hash FROM tenantiq_users WHERE id = $1 LIMIT 1`, [id]);
+  const row = rows[0];
+  if (!row) return { ok: false, reason: 'not-found' as const };
+  const valid = await bcrypt.compare(currentPassword, row.password_hash);
+  if (!valid) return { ok: false, reason: 'current' as const };
+  const same = await bcrypt.compare(newPassword, row.password_hash);
+  if (same) return { ok: false, reason: 'same' as const };
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await authPool.query(
+    `UPDATE tenantiq_users
+     SET password_hash = $1, failed_login_attempts = 0, locked_until = NULL, updated_at = NOW()
+     WHERE id = $2`,
+    [passwordHash, id],
+  );
+  return { ok: true as const };
+}
+
 function hashToken(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -162,7 +210,7 @@ export async function createAuthToken(userId: string, tokenType: 'verify-email' 
   await authPool.query(
     `INSERT INTO tenantiq_auth_tokens (user_id, token_hash, token_type, expires_at)
      VALUES ($1, $2, $3, NOW() + ($4 || ' minutes')::interval)`,
-    [userId, tokenHash, tokenType, String(ttlMinutes)],
+    [bareUserId(userId), tokenHash, tokenType, String(ttlMinutes)],
   );
   return rawToken;
 }

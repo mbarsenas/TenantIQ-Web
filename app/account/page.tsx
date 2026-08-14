@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
-import { auth, signOut } from '../../auth';
+import { auth } from '../../auth';
+import TenantIQAppNav from '../../components/TenantIQAppNav';
 import { changePasswordForUser, createAuthToken, findUserById, updateUserName } from '../../lib/tenantiq-users';
 import { sendVerificationEmail } from '../../lib/tenantiq-email';
 
@@ -63,16 +64,10 @@ export default async function AccountPage({
               : null;
 
   return (
-    <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb', padding: '34px 20px 60px' }}>
-      <div style={{ width: 'min(900px,100%)', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <a href="/assistant" style={{ color: '#8fc7ff', textDecoration: 'none', fontWeight: 700 }}>← Back to assistant</a>
-          <form action={async () => { 'use server'; await signOut({ redirectTo: '/signin' }); }}>
-            <button type="submit" style={{ border: '1px solid rgba(86,160,255,.28)', borderRadius: 10, padding: '9px 13px', background: 'transparent', color: '#c6dcf7', fontWeight: 800, cursor: 'pointer' }}>Sign out</button>
-          </form>
-        </div>
-
-        <div style={{ marginTop: 30, marginBottom: 24 }}>
+    <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
+      <TenantIQAppNav active="account" />
+      <div style={{ width: 'min(900px,100%)', margin: '0 auto', padding: '38px 20px 60px' }}>
+        <div style={{ marginBottom: 24 }}>
           <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ account</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,54px)', lineHeight: 1.05, margin: '10px 0 12px' }}>Manage your account.</h1>
           <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.6, margin: 0 }}>Update your profile, password, and email verification status.</p>

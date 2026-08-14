@@ -1,8 +1,14 @@
-import { Pool } from 'pg';
+import { Pool, neonConfig } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 
 const connectionString = process.env.TENANTIQ_AUTH_DATABASE_URL?.trim();
+
+// Neon’s serverless driver can carry ordinary pool queries over HTTPS rather
+// than raw Postgres TCP. This is important for managed hosts that block
+// outbound TCP/5432. Interactive transactions continue to use the driver’s
+// WebSocket transport.
+neonConfig.poolQueryViaFetch = true;
 
 const globalForTenantIQ = globalThis as unknown as { tenantiqAuthPool?: Pool };
 
@@ -11,11 +17,7 @@ export const authPool =
   (connectionString
     ? new Pool({ connectionString })
     : new Pool({
-        host: process.env.TENANTIQ_AUTH_DB_HOST || '127.0.0.1',
-        port: Number(process.env.TENANTIQ_AUTH_DB_PORT || 5432),
-        user: process.env.TENANTIQ_AUTH_DB_USER || 'postgres',
-        password: process.env.TENANTIQ_AUTH_DB_PASSWORD || 'postgres',
-        database: process.env.TENANTIQ_AUTH_DB_NAME || 'tenantiq',
+        connectionString: `postgresql://${encodeURIComponent(process.env.TENANTIQ_AUTH_DB_USER || 'postgres')}:${encodeURIComponent(process.env.TENANTIQ_AUTH_DB_PASSWORD || 'postgres')}@${process.env.TENANTIQ_AUTH_DB_HOST || '127.0.0.1'}:${Number(process.env.TENANTIQ_AUTH_DB_PORT || 5432)}/${process.env.TENANTIQ_AUTH_DB_NAME || 'tenantiq'}`,
       }));
 
 if (process.env.NODE_ENV !== 'production') globalForTenantIQ.tenantiqAuthPool = authPool;

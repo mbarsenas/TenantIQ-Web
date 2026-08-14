@@ -1,11 +1,12 @@
 import { auth, signOut } from '../auth';
 
-type ActivePage = 'dashboard' | 'assessments' | 'assistant' | 'account';
+type ActivePage = 'dashboard' | 'assessments' | 'assistant' | 'knowledge' | 'account';
 
 const links: Array<{ href: string; label: string; key: ActivePage }> = [
   { href: '/workspace', label: 'Dashboard', key: 'dashboard' },
   { href: '/assessments', label: 'Assessments', key: 'assessments' },
   { href: '/assistant', label: 'Assistant', key: 'assistant' },
+  { href: '/knowledge', label: 'Knowledge', key: 'knowledge' },
   { href: '/account', label: 'Account', key: 'account' },
 ];
 

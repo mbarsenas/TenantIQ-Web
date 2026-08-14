@@ -1,12 +1,20 @@
 'use client';
 
-import { FormEvent, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 type AskResponse = {
   assessment_id: string;
   route: 'specific_finding' | 'tenant_wide';
   check_id?: string | null;
   answer: string;
+};
+
+type AssessmentSummary = {
+  assessment_id: string;
+  source_name?: string | null;
+  imported_at?: string | null;
+  finding_count: number;
+  metadata?: Record<string, unknown>;
 };
 
 type ChatMessage = {
@@ -18,7 +26,17 @@ type ChatMessage = {
 };
 
 const ASSISTANT_API = '/api/assistant';
+const ASSESSMENTS_API = '/api/assistant/assessments';
 const starterQuestion = 'What are the biggest problems in this tenant and what should be fixed first?';
+
+function shortAssessmentId(value: string) {
+  return value.length > 44 ? `${value.slice(0, 41)}…` : value;
+}
+
+function assessmentLabel(item: AssessmentSummary) {
+  const name = item.source_name || item.assessment_id;
+  return `${name} · ${item.finding_count} findings`;
+}
 
 export default function TenantIQAssistant() {
   const [question, setQuestion] = useState(starterQuestion);
@@ -26,10 +44,40 @@ export default function TenantIQAssistant() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeAssessmentId, setActiveAssessmentId] = useState('');
+  const [assessments, setAssessments] = useState<AssessmentSummary[]>([]);
+  const [assessmentsLoading, setAssessmentsLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasConversation = messages.length > 0;
   const canSubmit = useMemo(() => Boolean(question.trim()) && !loading, [question, loading]);
+  const activeAssessment = useMemo(
+    () => assessments.find((item) => item.assessment_id === activeAssessmentId),
+    [assessments, activeAssessmentId],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAssessments() {
+      setAssessmentsLoading(true);
+      try {
+        const response = await fetch(ASSESSMENTS_API, { cache: 'no-store' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ assessments.');
+        const items = Array.isArray(payload) ? (payload as AssessmentSummary[]) : [];
+        if (cancelled) return;
+        setAssessments(items);
+        if (items.length > 0) setActiveAssessmentId((current) => current || items[0].assessment_id);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load TenantIQ assessments.');
+      } finally {
+        if (!cancelled) setAssessmentsLoading(false);
+      }
+    }
+
+    loadAssessments();
+    return () => { cancelled = true; };
+  }, []);
 
   function beginTimer() {
     setElapsed(0);
@@ -85,7 +133,6 @@ export default function TenantIQAssistant() {
   function startOver() {
     setMessages([]);
     setError('');
-    setActiveAssessmentId('');
     setQuestion(starterQuestion);
     setElapsed(0);
   }
@@ -102,6 +149,28 @@ export default function TenantIQAssistant() {
           <div style={{ color: '#6eb5ff', fontSize: 13, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ Knowledge Assistant</div>
           <h1 style={{ fontSize: 'clamp(34px,6vw,58px)', lineHeight: 1.05, margin: '10px 0 14px' }}>Ask questions about the assessment.</h1>
           <p style={{ maxWidth: 760, color: '#aeb8c8', fontSize: 17, lineHeight: 1.65, margin: 0 }}>Read-only, grounded answers from TenantIQ assessment evidence and the TenantIQ knowledge base. The assistant does not make tenant changes.</p>
+        </div>
+
+        <div style={{ marginBottom: 22, border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em' }}>Assessment context</div>
+              <div style={{ marginTop: 5, color: '#dfe8f4', fontWeight: 700 }}>
+                {activeAssessment ? assessmentLabel(activeAssessment) : assessmentsLoading ? 'Loading assessments…' : 'No assessment selected'}
+              </div>
+              {activeAssessmentId && <div title={activeAssessmentId} style={{ marginTop: 5, color: '#7f8b9a', fontSize: 12 }}>{shortAssessmentId(activeAssessmentId)}</div>}
+            </div>
+            <select
+              aria-label="Select TenantIQ assessment"
+              value={activeAssessmentId}
+              onChange={(event) => { setActiveAssessmentId(event.target.value); setMessages([]); setError(''); }}
+              disabled={loading || assessmentsLoading || assessments.length === 0}
+              style={{ minWidth: 320, maxWidth: '100%', borderRadius: 10, border: '1px solid rgba(86,160,255,.3)', background: '#081425', color: '#eaf2fb', padding: '11px 12px' }}
+            >
+              {assessments.length === 0 && <option value="">No stored assessments</option>}
+              {assessments.map((item) => <option key={item.assessment_id} value={item.assessment_id}>{assessmentLabel(item)}</option>)}
+            </select>
+          </div>
         </div>
 
         {hasConversation && <div style={{ display: 'grid', gap: 16, marginBottom: 22 }}>

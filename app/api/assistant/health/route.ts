@@ -1,12 +1,30 @@
 import { NextResponse } from 'next/server';
-
-const RAG_API_BASE = process.env.TENANTIQ_RAG_API || 'http://127.0.0.1:8787';
+import { getTenantIQRagApiBase } from '../../../../lib/tenantiq-rag';
 
 export async function GET() {
   const started = Date.now();
 
+  let ragApiBase: string;
   try {
-    const response = await fetch(`${RAG_API_BASE}/health`, {
+    ragApiBase = getTenantIQRagApiBase();
+  } catch (error) {
+    return NextResponse.json(
+      {
+        status: 'unavailable',
+        proxy: 'ok',
+        backend: 'not_configured',
+        latency_ms: Date.now() - started,
+        detail:
+          error instanceof Error
+            ? error.message
+            : 'TenantIQ RAG backend configuration is invalid.',
+      },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const response = await fetch(`${ragApiBase}/health`, {
       method: 'GET',
       cache: 'no-store',
     });

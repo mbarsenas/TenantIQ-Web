@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 
 const connectionString = process.env.TENANTIQ_AUTH_DATABASE_URL?.trim();
 
@@ -38,6 +39,22 @@ export async function ensureUserSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await authPool.query(`
+    CREATE TABLE IF NOT EXISTS tenantiq_auth_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES tenantiq_users(id) ON DELETE CASCADE,
+      token_hash TEXT UNIQUE NOT NULL,
+      token_type TEXT NOT NULL CHECK (token_type IN ('verify-email', 'reset-password')),
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await authPool.query(
+    `CREATE INDEX IF NOT EXISTS tenantiq_auth_tokens_user_idx ON tenantiq_auth_tokens (user_id, token_type, created_at DESC)`,
+  );
 }
 
 export async function findUserByEmail(email: string) {
@@ -81,4 +98,80 @@ export async function createUser(input: { email: string; password: string; name:
     name: row.name,
     emailVerified: Boolean(row.email_verified),
   };
+}
+
+function hashToken(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+export async function createAuthToken(userId: string, tokenType: 'verify-email' | 'reset-password', ttlMinutes: number) {
+  await ensureUserSchema();
+  const rawToken = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = hashToken(rawToken);
+  await authPool.query(
+    `INSERT INTO tenantiq_auth_tokens (user_id, token_hash, token_type, expires_at)
+     VALUES ($1, $2, $3, NOW() + ($4 || ' minutes')::interval)`,
+    [userId, tokenHash, tokenType, String(ttlMinutes)],
+  );
+  return rawToken;
+}
+
+export async function consumeEmailVerificationToken(token: string) {
+  await ensureUserSchema();
+  const tokenHash = hashToken(token);
+  const client = await authPool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT id, user_id FROM tenantiq_auth_tokens
+       WHERE token_hash = $1 AND token_type = 'verify-email' AND used_at IS NULL AND expires_at > NOW()
+       FOR UPDATE`,
+      [tokenHash],
+    );
+    const row = rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+    await client.query(`UPDATE tenantiq_users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1`, [row.user_id]);
+    await client.query(`UPDATE tenantiq_auth_tokens SET used_at = NOW() WHERE id = $1`, [row.id]);
+    await client.query('COMMIT');
+    return true;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function resetPasswordWithToken(token: string, newPassword: string) {
+  await ensureUserSchema();
+  if (newPassword.length < 12) return false;
+  const tokenHash = hashToken(token);
+  const client = await authPool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT id, user_id FROM tenantiq_auth_tokens
+       WHERE token_hash = $1 AND token_type = 'reset-password' AND used_at IS NULL AND expires_at > NOW()
+       FOR UPDATE`,
+      [tokenHash],
+    );
+    const row = rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await client.query(`UPDATE tenantiq_users SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [passwordHash, row.user_id]);
+    await client.query(`UPDATE tenantiq_auth_tokens SET used_at = NOW() WHERE user_id = $1 AND token_type = 'reset-password' AND used_at IS NULL`, [row.user_id]);
+    await client.query('COMMIT');
+    return true;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }

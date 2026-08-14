@@ -46,11 +46,19 @@ if (microsoftConfigured) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
+  trustHost: true,
   providers,
   pages: {
     signIn: '/signin',
   },
-  session: { strategy: 'jwt' },
+  session: {
+    strategy: 'jwt',
+    maxAge: 60 * 60 * 8,
+    updateAge: 60 * 30,
+  },
+  jwt: {
+    maxAge: 60 * 60 * 8,
+  },
   callbacks: {
     async jwt({ token, user, profile, account }) {
       if (user?.id) token.userId = user.id;

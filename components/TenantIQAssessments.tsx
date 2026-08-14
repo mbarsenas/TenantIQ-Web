@@ -87,7 +87,7 @@ export default function TenantIQAssessments() {
                   <div title={item.assessment_id} style={{ marginTop: 8, color: '#63758a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, overflowWrap: 'anywhere' }}>{item.assessment_id}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <a href={`/assistant?assessment=${encodeURIComponent(item.assessment_id)}`} style={primaryLinkStyle}>Open in Assistant</a>
+                  <a href="/assistant" style={primaryLinkStyle}>Open Assistant</a>
                 </div>
               </article>
             );

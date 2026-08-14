@@ -6,23 +6,79 @@ export type TenantIQEntitlement = {
   edition?: string;
   subscriptionId?: string;
   status?: string;
+  diagnosticCode?: string;
+  diagnosticDetail?: string;
 };
 
 function stripeSecret() {
   return process.env.STRIPE_SECRET_KEY?.trim() || '';
 }
 
+class StripeEntitlementError extends Error {
+  status?: number;
+  code?: string;
+  type?: string;
+
+  constructor(message: string, status?: number, code?: string, type?: string) {
+    super(message);
+    this.name = 'StripeEntitlementError';
+    this.status = status;
+    this.code = code;
+    this.type = type;
+  }
+}
+
+function safeStripeMessage(value: unknown) {
+  return String(value || 'Stripe request failed.')
+    .replace(/(?:sk|rk)_(?:test|live)_[A-Za-z0-9_-]+/g, '[redacted Stripe key]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .slice(0, 300);
+}
+
 async function stripeGet(path: string, query?: URLSearchParams) {
   const secret = stripeSecret();
-  if (!secret) throw new Error('STRIPE_SECRET_KEY is not configured.');
+  if (!secret) throw new StripeEntitlementError('STRIPE_SECRET_KEY is not configured.', 503, 'missing_secret', 'configuration');
+
   const url = new URL(`https://api.stripe.com/v1/${path}`);
   if (query) url.search = query.toString();
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${secret}` },
-    cache: 'no-store',
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload?.error?.message || `Stripe request failed (${response.status}).`);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${secret}` },
+      cache: 'no-store',
+    });
+  } catch (error) {
+    throw new StripeEntitlementError(
+      `Network request to Stripe failed: ${safeStripeMessage(error instanceof Error ? error.message : error)}`,
+      undefined,
+      'network_error',
+      'network',
+    );
+  }
+
+  let payload: any = {};
+  try {
+    payload = await response.json();
+  } catch {
+    throw new StripeEntitlementError(
+      `Stripe returned a non-JSON response (HTTP ${response.status}).`,
+      response.status,
+      'invalid_response',
+      'api_error',
+    );
+  }
+
+  if (!response.ok) {
+    const stripeError = payload?.error || {};
+    throw new StripeEntitlementError(
+      safeStripeMessage(stripeError.message || `Stripe request failed (${response.status}).`),
+      response.status,
+      String(stripeError.code || 'stripe_api_error'),
+      String(stripeError.type || 'api_error'),
+    );
+  }
+
   return payload;
 }
 
@@ -102,7 +158,12 @@ export async function getTenantIQEntitlement(email?: string | null): Promise<Ten
   if (!normalizedEmail) return { entitled: false, reason: 'not_authenticated' };
   if (!stripeSecret()) {
     if (process.env.NODE_ENV !== 'production') return { entitled: true, reason: 'active', edition: 'Development' };
-    return { entitled: false, reason: 'stripe_unavailable' };
+    return {
+      entitled: false,
+      reason: 'stripe_unavailable',
+      diagnosticCode: 'missing_secret',
+      diagnosticDetail: 'STRIPE_SECRET_KEY is not available to the running production process.',
+    };
   }
 
   try {
@@ -145,7 +206,21 @@ export async function getTenantIQEntitlement(email?: string | null): Promise<Ten
     return { entitled: false, reason: 'not_fulfilled' };
   } catch (error) {
     console.error('[TenantIQ entitlement] Stripe entitlement lookup failed:', error);
-    return { entitled: false, reason: 'stripe_unavailable' };
+    if (error instanceof StripeEntitlementError) {
+      const code = error.code || error.type || (error.status ? `http_${error.status}` : 'stripe_error');
+      return {
+        entitled: false,
+        reason: 'stripe_unavailable',
+        diagnosticCode: code,
+        diagnosticDetail: safeStripeMessage(error.message),
+      };
+    }
+    return {
+      entitled: false,
+      reason: 'stripe_unavailable',
+      diagnosticCode: 'unexpected_error',
+      diagnosticDetail: safeStripeMessage(error instanceof Error ? error.message : error),
+    };
   }
 }
 

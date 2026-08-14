@@ -8,7 +8,7 @@ const reasonCopy: Record<string, string> = {
   no_purchase: 'TenantIQ could not find a matching TenantIQ purchase for this signed-in email address.',
   inactive: 'A TenantIQ subscription was found, but it is not currently active or trialing.',
   not_fulfilled: 'An active TenantIQ subscription was found, but the license fulfillment record is not complete.',
-  stripe_unavailable: 'TenantIQ could not complete the Stripe entitlement lookup. Check the web-host Stripe configuration and logs.',
+  stripe_unavailable: 'TenantIQ could not complete the Stripe entitlement lookup.',
   not_authenticated: 'TenantIQ could not determine the signed-in account.',
   active: 'TenantIQ found an active entitlement. If you are seeing this page, return to the workspace.',
 };
@@ -38,6 +38,12 @@ export default async function LicenseRequiredPage() {
             <div style={{ color: '#f4d35e', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Entitlement diagnostic</div>
             <div style={{ color: '#dce7f4', lineHeight: 1.55, fontSize: 14 }}>{diagnostic}</div>
             <div style={{ color: '#7f93aa', fontSize: 12, marginTop: 7 }}>Reason code: <code>{reason}</code></div>
+            {entitlement.diagnosticCode ? (
+              <div style={{ color: '#9db0c5', fontSize: 12, marginTop: 5 }}>Stripe code: <code>{entitlement.diagnosticCode}</code></div>
+            ) : null}
+            {entitlement.diagnosticDetail ? (
+              <div style={{ color: '#c5d3e2', fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>{entitlement.diagnosticDetail}</div>
+            ) : null}
           </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

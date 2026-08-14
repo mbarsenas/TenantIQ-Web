@@ -73,6 +73,7 @@ export default function TenantIQAssessments() {
             const imported = item.imported_at ? new Date(item.imported_at).toLocaleString() : 'Import time unavailable';
             const validated = item.metadata?.validated === true;
             const assistantHref = `/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment_id)}`;
+            const detailHref = `/assessments/${encodeURIComponent(item.assessment_id)}`;
             return (
               <article key={item.assessment_id} style={cardStyle}>
                 <div style={{ minWidth: 0 }}>
@@ -88,7 +89,8 @@ export default function TenantIQAssessments() {
                   <div title={item.assessment_id} style={{ marginTop: 8, color: '#63758a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, overflowWrap: 'anywhere' }}>{item.assessment_id}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <a href={assistantHref} style={primaryLinkStyle}>Open in Assistant</a>
+                  <a href={detailHref} style={secondaryLinkStyle}>View findings</a>
+                  <a href={assistantHref} style={primaryLinkStyle}>Open Assistant</a>
                 </div>
               </article>
             );
@@ -107,3 +109,4 @@ const cardStyle = { display: 'flex', justifyContent: 'space-between', alignItems
 const noticeStyle = { border: '1px solid rgba(86,160,255,.18)', borderRadius: 14, background: 'rgba(8,22,40,.66)', padding: 18, color: '#a9b9ca' };
 const emptyStyle = { border: '1px dashed rgba(86,160,255,.24)', borderRadius: 16, background: 'rgba(8,22,40,.50)', padding: 28 };
 const primaryLinkStyle = { display: 'inline-block', borderRadius: 10, padding: '10px 14px', background: '#2f87ff', color: '#fff', fontSize: 13, fontWeight: 850, textDecoration: 'none' };
+const secondaryLinkStyle = { display: 'inline-block', borderRadius: 10, padding: '9px 13px', border: '1px solid rgba(86,160,255,.25)', color: '#9dcbff', fontSize: 13, fontWeight: 850, textDecoration: 'none' };

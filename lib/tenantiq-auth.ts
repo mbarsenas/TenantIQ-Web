@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { auth } from '../auth';
+import { getTenantIQEntitlement } from './tenantiq-entitlement';
 
 const DEV_CUSTOMER_ID = process.env.TENANTIQ_DEV_CUSTOMER_ID || 'local-dev';
 
@@ -14,6 +15,10 @@ export async function getAuthenticatedCustomerId(): Promise<string> {
   const tenantId = session?.user?.tenantId?.trim();
 
   if (userId) {
+    const entitlement = await getTenantIQEntitlement(session.user.email);
+    if (!entitlement.entitled) {
+      throw new Error('An active TenantIQ license is required to access assessments and the Knowledge Assistant.');
+    }
     return normalizeCustomerId(tenantId ? `${tenantId}:${userId}` : userId);
   }
 

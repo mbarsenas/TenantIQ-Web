@@ -5,7 +5,7 @@ const DEV_CUSTOMER_ID = process.env.TENANTIQ_DEV_CUSTOMER_ID || 'local-dev';
 
 function normalizeCustomerId(value: string): string {
   const normalized = value.trim().toLowerCase();
-  return normalized.replace(/[^a-z0-9._@+-]+/g, '-').replace(/^-+|-+$/g, '') || DEV_CUSTOMER_ID;
+  return normalized.replace(/[^a-z0-9._@:+-]+/g, '-').replace(/^-+|-+$/g, '') || DEV_CUSTOMER_ID;
 }
 
 export async function getAuthenticatedCustomerId(): Promise<string> {
@@ -13,8 +13,8 @@ export async function getAuthenticatedCustomerId(): Promise<string> {
   const userId = session?.user?.id?.trim();
   const tenantId = session?.user?.tenantId?.trim();
 
-  if (userId && tenantId) {
-    return normalizeCustomerId(`${tenantId}:${userId}`);
+  if (userId) {
+    return normalizeCustomerId(tenantId ? `${tenantId}:${userId}` : userId);
   }
 
   if (process.env.NODE_ENV !== 'production') {

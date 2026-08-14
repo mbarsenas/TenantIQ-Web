@@ -1,7 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getTenantIQRagApiBase } from '../../../../lib/tenantiq-rag';
 
-export async function GET() {
+const DEFAULT_CUSTOMER_ID = process.env.TENANTIQ_DEFAULT_CUSTOMER_ID?.trim() || 'local-dev';
+
+function customerId(request: NextRequest): string {
+  return request.headers.get('x-tenantiq-customer-id')?.trim() || DEFAULT_CUSTOMER_ID;
+}
+
+export async function GET(request: NextRequest) {
   let ragApiBase: string;
 
   try {
@@ -16,6 +22,7 @@ export async function GET() {
   try {
     const response = await fetch(`${ragApiBase}/assessments`, {
       method: 'GET',
+      headers: { 'X-TenantIQ-Customer-ID': customerId(request) },
       cache: 'no-store',
     });
 

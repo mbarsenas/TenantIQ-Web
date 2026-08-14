@@ -11,7 +11,7 @@ export default async function AssistantPage() {
   const session = await auth();
   const user = session?.user;
 
-  if (!user?.id) {
+  if (!user || !user.id) {
     redirect('/signin');
   }
 
@@ -28,7 +28,7 @@ export default async function AssistantPage() {
           </button>
         </form>
       </div>
-      <TenantIQAssistant signedInUser={signedInUser} />
+      <TenantIQAssistant />
     </>
   );
 }

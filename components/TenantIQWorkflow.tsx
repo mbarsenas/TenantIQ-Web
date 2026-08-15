@@ -10,7 +10,7 @@ type WorkflowState = 'needs_review' | 'in_progress' | 'ready_to_validate' | 'res
 type WorkflowRecord = { state: WorkflowState; checkId: string; title: string; workloadName: string; updatedAt: string; resolvedAt?: string };
 type WorkflowRecords = Record<string, WorkflowRecord>;
 
-const STORAGE_KEY = 'tenantiq-workflow-state-v1';
+const LEGACY_STORAGE_KEY = 'tenantiq-workflow-state-v1';
 const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, none: 4, '': 5 };
 const statusOrder: Record<string, number> = { FAIL: 0, WARNING: 1 };
 
@@ -43,21 +43,46 @@ function itemKey(item: WorkflowItem) {
   return `${item.workloadName}::${item.check_id || item.title || 'finding'}`;
 }
 
-function readRecords(): WorkflowRecords {
+function readLegacyRecords(): WorkflowRecords {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
     return raw ? JSON.parse(raw) as WorkflowRecords : {};
   } catch { return {}; }
 }
 
-function saveRecords(records: WorkflowRecords) {
-  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); } catch { /* browser storage unavailable */ }
+async function saveRecords(records: WorkflowRecords) {
+  try { window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(records)); } catch { /* optional compatibility cache */ }
+  const response = await fetch('/api/workflow/state', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    body: JSON.stringify({ records }),
+  });
+  const payload = await json(response);
+  if (!response.ok) throw new Error(payload?.detail || 'Unable to save TenantIQ workflow state.');
+}
+
+async function readRecords(): Promise<WorkflowRecords> {
+  const response = await fetch('/api/workflow/state', { cache: 'no-store' });
+  const payload = await json(response);
+  if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ workflow state.');
+  const serverRecords = payload?.records && typeof payload.records === 'object' ? payload.records as WorkflowRecords : {};
+  if (Object.keys(serverRecords).length) return serverRecords;
+
+  // One-time migration from the browser-only prototype into the licensed workspace.
+  const legacy = readLegacyRecords();
+  if (Object.keys(legacy).length) {
+    await saveRecords(legacy);
+    return legacy;
+  }
+  return {};
 }
 
 export default function TenantIQWorkflow() {
   const [items, setItems] = useState<WorkflowItem[]>([]);
   const [records, setRecords] = useState<WorkflowRecords>({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [workload, setWorkload] = useState('ALL');
   const [priority, setPriority] = useState('ALL');
@@ -102,23 +127,27 @@ export default function TenantIQWorkflow() {
           return st || String(a.check_id || '').localeCompare(String(b.check_id || ''));
         });
 
-        const currentRecords = readRecords();
+        const currentRecords = await readRecords();
         const activeKeys = new Set(actionable.map(itemKey));
         const now = new Date().toISOString();
+        let changed = false;
         for (const item of actionable) {
           const key = itemKey(item);
           if (!currentRecords[key]) {
             currentRecords[key] = { state: 'needs_review', checkId: item.check_id || 'Finding', title: item.title || 'TenantIQ finding', workloadName: item.workloadName, updatedAt: now };
+            changed = true;
           } else if (currentRecords[key].state === 'resolved') {
             currentRecords[key] = { ...currentRecords[key], state: 'needs_review', updatedAt: now, resolvedAt: undefined };
+            changed = true;
           }
         }
         for (const [key, record] of Object.entries(currentRecords)) {
           if (!activeKeys.has(key) && record.state === 'ready_to_validate') {
             currentRecords[key] = { ...record, state: 'resolved', updatedAt: now, resolvedAt: now };
+            changed = true;
           }
         }
-        saveRecords(currentRecords);
+        if (changed) await saveRecords(currentRecords);
         if (!cancelled) { setItems(actionable); setRecords(currentRecords); }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to build the TenantIQ remediation workflow.');
@@ -128,11 +157,20 @@ export default function TenantIQWorkflow() {
     return () => { cancelled = true; };
   }, []);
 
-  function setItemState(item: WorkflowItem, state: Exclude<WorkflowState, 'resolved'>) {
+  async function setItemState(item: WorkflowItem, state: Exclude<WorkflowState, 'resolved'>) {
     const key = itemKey(item);
     const next = { ...records, [key]: { state, checkId: item.check_id || 'Finding', title: item.title || 'TenantIQ finding', workloadName: item.workloadName, updatedAt: new Date().toISOString() } };
     setRecords(next);
-    saveRecords(next);
+    setSaving(true);
+    setError('');
+    try {
+      await saveRecords(next);
+    } catch (err) {
+      setRecords(records);
+      setError(err instanceof Error ? err.message : 'Unable to save TenantIQ workflow state.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const workloads = useMemo(() => ['ALL', ...Array.from(new Set(items.map(i => i.workloadName))).sort()], [items]);
@@ -151,9 +189,10 @@ export default function TenantIQWorkflow() {
   const resolved = Object.values(records).filter(r => r.state === 'resolved').length;
 
   if (loading) return <div style={panelStyle}>Building your remediation workflow from the latest stored assessments…</div>;
-  if (error) return <div style={{ ...panelStyle, borderColor: 'rgba(255,90,90,.28)', color: '#ffaaaa' }}>{error}</div>;
+  if (error && !items.length) return <div style={{ ...panelStyle, borderColor: 'rgba(255,90,90,.28)', color: '#ffaaaa' }}>{error}</div>;
 
   return <>
+    {error ? <div style={{ ...panelStyle, marginBottom: 14, borderColor: 'rgba(255,90,90,.28)', color: '#ffaaaa' }}>{error}</div> : null}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 12, marginBottom: 18 }}>
       <Metric label="Actionable" value={String(items.length)} />
       <Metric label="Fail" value={String(fails)} tone="fail" />
@@ -165,7 +204,10 @@ export default function TenantIQWorkflow() {
     </div>
 
     <section style={{ ...panelStyle, marginBottom: 16 }}>
-      <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 12 }}>Remediation lifecycle</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' }}>Remediation lifecycle</div>
+        <div style={{ color: saving ? '#f4d35e' : '#86e1ad', fontSize: 11, fontWeight: 800 }}>{saving ? 'Saving workspace state…' : 'Workspace state synced'}</div>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
         <Step number="1" title="Needs review" text="Confirm exactly what TenantIQ observed." />
         <Step number="2" title="In progress" text="Apply the approved configuration change." />
@@ -201,11 +243,11 @@ export default function TenantIQWorkflow() {
         </button>
         {open && <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(86,160,255,.12)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16, paddingTop: 16 }}><Field label="Observed evidence" value={evidence} /><Field label="Recommended remediation" value={recommendation} /></div>
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 12, background: 'rgba(47,135,255,.055)', border: '1px solid rgba(86,160,255,.12)' }}><div style={{ fontSize: 11, fontWeight: 900, color: '#7fbaff', textTransform: 'uppercase', letterSpacing: '.05em' }}>Workflow state</div><div style={{ fontSize: 13, color: '#b8c5d3', lineHeight: 1.6, marginTop: 5 }}>Customers can move a finding through review, remediation, and validation. Resolved is intentionally not a manual option: TenantIQ sets it only after the finding disappears from a later assessment while it was Ready to validate.</div></div>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 12, background: 'rgba(47,135,255,.055)', border: '1px solid rgba(86,160,255,.12)' }}><div style={{ fontSize: 11, fontWeight: 900, color: '#7fbaff', textTransform: 'uppercase', letterSpacing: '.05em' }}>Workflow state</div><div style={{ fontSize: 13, color: '#b8c5d3', lineHeight: 1.6, marginTop: 5 }}>This state is stored in the licensed TenantIQ workspace and follows the customer across browsers and devices. Resolved remains assessment-verified only.</div></div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            <button onClick={() => setItemState(item, 'needs_review')} style={stateButton(state === 'needs_review')}>Needs review</button>
-            <button onClick={() => setItemState(item, 'in_progress')} style={stateButton(state === 'in_progress')}>Mark in progress</button>
-            <button onClick={() => setItemState(item, 'ready_to_validate')} style={stateButton(state === 'ready_to_validate')}>Ready to validate</button>
+            <button disabled={saving} onClick={() => setItemState(item, 'needs_review')} style={stateButton(state === 'needs_review')}>Needs review</button>
+            <button disabled={saving} onClick={() => setItemState(item, 'in_progress')} style={stateButton(state === 'in_progress')}>Mark in progress</button>
+            <button disabled={saving} onClick={() => setItemState(item, 'ready_to_validate')} style={stateButton(state === 'ready_to_validate')}>Ready to validate</button>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}><a href={assessmentHref} style={secondaryLinkStyle}>View assessment evidence</a><a href={assistantHref} style={primaryLinkStyle}>Start guided remediation →</a></div>
         </div>}

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
 import TenantIQWorkflow from '../../components/TenantIQWorkflow';
+import TenantIQWorkflowFocus from '../../components/TenantIQWorkflowFocus';
 import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 
 export default async function WorkflowPage({
@@ -28,6 +29,7 @@ export default async function WorkflowPage({
           </p>
         </div>
         <TenantIQWorkflow initialFinding={initialFinding} />
+        <TenantIQWorkflowFocus finding={initialFinding} />
       </div>
     </main>
   );

@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import TenantIQAppNav from '../../../../components/TenantIQAppNav';
 import { requireTenantIQEntitlement } from '../../../../lib/tenantiq-entitlement';
-import { getKnowledgeControl, getKnowledgeWorkload } from '../../../../lib/knowledge-catalog';
+import { getKnowledgeControl, getKnowledgeWorkload } from '../../../../lib/knowledge-catalog-all';
 
 const panel = { border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 22 } as const;
 
@@ -82,7 +82,7 @@ export default async function KnowledgeArticlePage({ params }: { params: Promise
             <div>
               <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase' }}>Use your tenant evidence</div>
               <h2 style={{ margin: '8px 0 6px', fontSize: 23 }}>Ask TenantIQ about {control.id}</h2>
-              <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.55, fontSize: 14 }}>Open the Knowledge Assistant and investigate {control.title} against the selected assessment.</p>
+              <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.55, fontSize: 14 }}>Open the AI Assistant and investigate {control.title} against the selected assessment.</p>
             </div>
             <a href={`/assistant?finding=${encodeURIComponent(control.id)}`} style={{ display: 'inline-block', borderRadius: 10, padding: '12px 17px', background: '#2f87ff', color: '#fff', fontWeight: 900, textDecoration: 'none', whiteSpace: 'nowrap' }}>Ask about {control.title} →</a>
           </section>

@@ -12,7 +12,7 @@ type WorkloadCard = {
 
 const workloadCards: WorkloadCard[] = [
   { name: 'Entra ID', slug: 'entra', description: 'Identity, authentication, Conditional Access, applications, and governance guidance.', explicitCount: 8 },
-  { name: 'Exchange Online', slug: 'exchange', description: 'Mail flow, authentication, transport, and messaging security guidance.', explicitCount: 10 },
+  { name: 'Exchange Online', slug: 'exchange', description: 'Mail flow, authentication, transport, and messaging security guidance.', explicitCount: 50 },
   { name: 'SharePoint Online', slug: 'sharepoint', description: 'Sharing, governance, permissions, lifecycle, and collaboration controls.' },
   { name: 'Teams', slug: 'teams', description: 'Meetings, messaging, external access, devices, apps, and collaboration policy guidance.' },
   { name: 'OneDrive', slug: 'onedrive', description: 'Sharing, device access, sync, lifecycle, recovery, and personal storage controls.' },

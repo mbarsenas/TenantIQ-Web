@@ -18,6 +18,7 @@ type UploadResult = {
   validated: boolean;
   canonicalFindings: number;
   canonicalRatio: number;
+  duplicate: boolean;
 };
 
 async function readPayload(response: Response) {
@@ -80,6 +81,8 @@ export default function TenantIQAssessments() {
       const canonicalFindings = numberValue(metadata.canonical_findings, findingCount);
       const canonicalRatio = numberValue(metadata.canonical_ratio, findingCount ? canonicalFindings / findingCount : 0);
       const sourceName = String(payload?.source_name || metadata.original_filename || file.name);
+      const assessmentId = String(payload?.assessment_id || '');
+      const duplicate = assessmentId !== '' && items.some((item) => item.assessment_id === assessmentId);
 
       setUploadResult({
         fileName: file.name,
@@ -88,6 +91,7 @@ export default function TenantIQAssessments() {
         validated: metadata.validated === true,
         canonicalFindings,
         canonicalRatio,
+        duplicate,
       });
       await refreshAssessments();
     } catch (err) {
@@ -126,8 +130,11 @@ export default function TenantIQAssessments() {
     {uploadResult ? <section style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(52,211,153,.28)', background: 'rgba(52,211,153,.045)' }} aria-label="Assessment import validation">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ color: '#86e1ad', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase' }}>{uploadResult.validated ? 'Validated TenantIQ assessment' : 'Assessment imported'}</div>
+          <div style={{ color: '#86e1ad', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase' }}>
+            {uploadResult.duplicate ? 'Duplicate assessment already stored' : uploadResult.validated ? 'Validated TenantIQ assessment' : 'Assessment imported'}
+          </div>
           <div style={{ color: '#e7f7ed', fontSize: 16, fontWeight: 850, marginTop: 5, overflowWrap: 'anywhere' }}>{uploadResult.fileName}</div>
+          {uploadResult.duplicate ? <div style={{ color: '#9fcab2', fontSize: 12, marginTop: 6 }}>TenantIQ matched this file by content and kept the existing stored assessment.</div> : null}
         </div>
         <span style={{ borderRadius: 999, padding: '6px 10px', background: 'rgba(52,211,153,.10)', color: '#86e1ad', fontSize: 11, fontWeight: 900 }}>{uploadResult.workload}</span>
       </div>
@@ -135,7 +142,7 @@ export default function TenantIQAssessments() {
         <ValidationField label="Findings imported" value={String(uploadResult.findingCount)} />
         <ValidationField label="Canonical findings" value={`${uploadResult.canonicalFindings}/${uploadResult.findingCount}`} />
         <ValidationField label="Canonical match" value={`${Math.round(uploadResult.canonicalRatio * 100)}%`} />
-        <ValidationField label="Validation" value={uploadResult.validated ? 'Passed' : 'Imported'} />
+        <ValidationField label={uploadResult.duplicate ? 'Storage' : 'Validation'} value={uploadResult.duplicate ? 'Already stored' : uploadResult.validated ? 'Passed' : 'Imported'} />
       </div>
     </section> : null}
 

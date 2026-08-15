@@ -64,6 +64,8 @@ export function tenantIQWorkloadKey(value: string): TenantIQWorkloadKey | '' {
   ) return 'onedrive';
 
   if (
+    name.includes('microsoft-intune') ||
+    name.includes('microsoftintune') ||
     hasToken(name, 'intune') ||
     name.includes('endpoint-manager') ||
     name.includes('endpointmanager') ||

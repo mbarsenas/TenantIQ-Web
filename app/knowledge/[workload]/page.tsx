@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import TenantIQAppNav from '../../../components/TenantIQAppNav';
 import { requireTenantIQEntitlement } from '../../../lib/tenantiq-entitlement';
-import { getKnowledgeWorkload } from '../../../lib/knowledge-catalog';
+import { getKnowledgeWorkload } from '../../../lib/knowledge-catalog-all';
 
 export default async function KnowledgeWorkloadPage({ params }: { params: Promise<{ workload: string }> }) {
   const { session, entitlement } = await requireTenantIQEntitlement();

@@ -1,15 +1,17 @@
 import { redirect } from 'next/navigation';
-import { auth } from '../../../auth';
 import TenantIQAppNav from '../../../components/TenantIQAppNav';
 import TenantIQAssessmentDetail from '../../../components/TenantIQAssessmentDetail';
+import { requireTenantIQEntitlement } from '../../../lib/tenantiq-entitlement';
 
 export default async function AssessmentDetailPage({
   params,
 }: {
   params: Promise<{ assessmentId: string }>;
 }) {
-  const session = await auth();
+  const { session, entitlement } = await requireTenantIQEntitlement();
   if (!session?.user?.id) redirect('/signin');
+  if (!entitlement.entitled) redirect('/license-required');
+
   const { assessmentId } = await params;
 
   return (

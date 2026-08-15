@@ -49,15 +49,20 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
 
   const errorMessage = params.error === 'match' ? 'The new passwords do not match.' : params.error === 'current' ? 'Your current password is incorrect.' : params.error === 'same' ? 'Choose a password different from your current password.' : params.error === 'weak' ? 'Use at least 12 characters for your new password.' : params.error ? 'TenantIQ could not complete that account change.' : null;
   const purchaseEmail = user?.email || session.user.email || 'Not available';
+  const workspaceAccess = entitlement.entitled ? 'Enabled' : 'Blocked';
+  const subscriptionStatus = entitlement.entitled ? titleCase(entitlement.status || 'active') : statusForReason(entitlement.reason);
 
   return (
     <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
       <TenantIQAppNav active="account" />
-      <div style={{ width: 'min(1040px,100%)', margin: '0 auto', padding: '38px 20px 60px' }}>
-        <div style={{ marginBottom: 24 }}>
-          <div style={eyebrowStyle}>TenantIQ account</div>
-          <h1 style={{ fontSize: 'clamp(34px,6vw,54px)', lineHeight: 1.05, margin: '10px 0 12px' }}>Account & subscription.</h1>
-          <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.6, margin: 0 }}>Review your TenantIQ access, subscription, and account security.</p>
+      <div style={{ width: 'min(1120px,100%)', margin: '0 auto', padding: '38px 20px 68px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 24 }}>
+          <div>
+            <div style={eyebrowStyle}>TenantIQ account</div>
+            <h1 style={{ fontSize: 'clamp(34px,6vw,54px)', lineHeight: 1.05, margin: '10px 0 12px' }}>Account & subscription.</h1>
+            <p style={{ color: '#aeb8c8', fontSize: 16, lineHeight: 1.6, margin: 0, maxWidth: 760 }}>Review your identity, TenantIQ license, subscription state, and workspace access from one place.</p>
+          </div>
+          <a href={entitlement.entitled ? '/workspace' : '/pricing'} style={primaryLinkStyle}>{entitlement.entitled ? 'Open workspace' : 'View TenantIQ plans'}</a>
         </div>
 
         {params.saved === '1' ? <Notice text="Profile updated." /> : null}
@@ -66,13 +71,20 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         {params.verification === 'already' ? <Notice text="Your email is already verified." /> : null}
         {errorMessage ? <Notice text={errorMessage} error /> : null}
 
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12, marginBottom: 18 }} aria-label="TenantIQ account overview">
+          <SummaryTile label="Workspace access" value={workspaceAccess} tone={entitlement.entitled ? 'good' : 'bad'} />
+          <SummaryTile label="Subscription" value={subscriptionStatus} />
+          <SummaryTile label="Edition" value={entitlement.edition || (entitlement.entitled ? 'TenantIQ' : 'No active edition')} />
+          <SummaryTile label="Purchase email" value={purchaseEmail} />
+        </section>
+
         <section style={{ display: 'grid', gap: 18 }}>
           <div style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div>
-                <div style={eyebrowStyle}>Subscription</div>
-                <h2 style={{ ...headingStyle, marginTop: 7 }}>TenantIQ workspace access</h2>
-                <div style={{ color: '#91a3b8', fontSize: 13, lineHeight: 1.55 }}>Entitlement is verified against the TenantIQ subscription associated with your purchase email.</div>
+                <div style={eyebrowStyle}>License & subscription</div>
+                <h2 style={{ ...headingStyle, marginTop: 7 }}>TenantIQ workspace entitlement</h2>
+                <div style={{ color: '#91a3b8', fontSize: 13, lineHeight: 1.55 }}>TenantIQ matches this signed-in account to the subscription associated with the purchase email and only enables customer workspace access when the subscription is active and fulfillment is complete.</div>
               </div>
               <StatusBadge active={entitlement.entitled} />
             </div>
@@ -82,23 +94,38 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14, marginTop: 18 }}>
                   <LicenseField label="Edition" value={entitlement.edition || 'TenantIQ'} />
                   <LicenseField label="Subscription status" value={titleCase(entitlement.status || 'active')} />
-                  <LicenseField label="Purchase email" value={purchaseEmail} />
+                  <LicenseField label="Workspace access" value="Enabled" />
                   <LicenseField label="Licensed domain" value={entitlement.licensedDomain || 'Not restricted'} />
                   <LicenseField label="Tenant allowance" value={entitlement.maxTenants ? `${entitlement.maxTenants} tenant${entitlement.maxTenants === '1' ? '' : 's'}` : 'Per subscription'} />
-                  <LicenseField label="License expires" value={formatLicenseDate(entitlement.licenseExpiresAt)} />
+                  <LicenseField label="License term" value={formatLicenseDate(entitlement.licenseExpiresAt)} />
                 </div>
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(86,160,255,.12)', color: '#748ba6', fontSize: 12, lineHeight: 1.6 }}>
-                  Subscription ID: <span style={monoStyle}>{maskIdentifier(entitlement.subscriptionId)}</span>{entitlement.licenseId ? <> &nbsp;·&nbsp; License ID: <span style={monoStyle}>{entitlement.licenseId}</span></> : null}
+                  Subscription ID: <span style={monoStyle}>{maskIdentifier(entitlement.subscriptionId)}</span>{entitlement.licenseId ? <> &nbsp;·&nbsp; License ID: <span style={monoStyle}>{maskIdentifier(entitlement.licenseId)}</span></> : null}
                 </div>
               </>
             ) : (
               <div style={{ marginTop: 16, border: '1px solid rgba(248,113,113,.18)', background: 'rgba(248,113,113,.06)', borderRadius: 10, padding: '14px', color: '#fca5a5', fontSize: 13, lineHeight: 1.55 }}>
-                <strong>Workspace access is not active.</strong><br />
+                <strong>Workspace access is currently blocked.</strong><br />
                 {entitlementMessage(entitlement.reason)}
-                <div style={{ marginTop: 12 }}><a href="/pricing" style={primaryLinkStyle}>View TenantIQ plans</a></div>
+                <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}><a href="/pricing" style={primaryLinkStyle}>View TenantIQ plans</a><a href="/license-required" style={secondaryLinkStyle}>View access status</a></div>
               </div>
             )}
           </div>
+
+          {entitlement.entitled ? (
+            <div style={cardStyle}>
+              <div style={eyebrowStyle}>Licensed workspace</div>
+              <h2 style={{ ...headingStyle, marginTop: 7 }}>Your subscription unlocks the customer workspace</h2>
+              <p style={{ color: '#91a3b8', fontSize: 13, lineHeight: 1.6, margin: '0 0 16px' }}>These areas are protected by the same TenantIQ entitlement check. If the subscription becomes inactive, customer workspace access is blocked while the Account page remains available for status visibility.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
+                <AccessLink href="/workspace" title="Dashboard" text="Tenant posture and workload overview" />
+                <AccessLink href="/assessments" title="Assessments" text="Stored assessment history and findings" />
+                <AccessLink href="/assistant" title="AI Assistant" text="Read-only assessment guidance" />
+                <AccessLink href="/knowledge" title="Knowledge" text="Microsoft 365 control guidance" />
+                <AccessLink href="/workflow" title="Workflow" text="Persistent remediation tracking" />
+              </div>
+            </div>
+          ) : null}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18 }}>
             <div style={cardStyle}>
@@ -137,12 +164,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   );
 }
 
+function SummaryTile({ label, value, tone = 'normal' }: { label: string; value: string; tone?: 'normal' | 'good' | 'bad' }) {
+  const color = tone === 'good' ? '#86efac' : tone === 'bad' ? '#fca5a5' : '#eef5fd';
+  return <div style={{ border: '1px solid rgba(86,160,255,.17)', borderRadius: 14, background: 'rgba(8,22,40,.66)', padding: 15 }}><div style={{ color: '#8192a6', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div><div style={{ color, fontSize: 17, fontWeight: 850, marginTop: 6, overflowWrap: 'anywhere' }}>{value}</div></div>;
+}
+function AccessLink({ href, title, text }: { href: string; title: string; text: string }) { return <a href={href} style={{ border: '1px solid rgba(86,160,255,.14)', borderRadius: 12, padding: 14, background: 'rgba(6,17,31,.42)', textDecoration: 'none' }}><div style={{ color: '#dcecff', fontSize: 14, fontWeight: 850 }}>{title}</div><div style={{ color: '#8296ac', fontSize: 12, lineHeight: 1.45, marginTop: 5 }}>{text}</div></a>; }
 function StatusBadge({ active }: { active: boolean }) { return <span style={{ borderRadius: 999, padding: '7px 11px', fontSize: 11, fontWeight: 900, background: active ? 'rgba(34,197,94,.12)' : 'rgba(248,113,113,.1)', color: active ? '#86efac' : '#fca5a5', border: `1px solid ${active ? 'rgba(34,197,94,.24)' : 'rgba(248,113,113,.22)'}` }}>{active ? 'ACTIVE' : 'NOT ACTIVE'}</span>; }
 function LicenseField({ label, value }: { label: string; value: string }) { return <div style={{ border: '1px solid rgba(86,160,255,.12)', borderRadius: 10, padding: '12px 13px', background: 'rgba(4,14,27,.35)' }}><span style={labelStyle}>{label}</span><div style={{ ...valueStyle, wordBreak: 'break-word' }}>{value}</div></div>; }
 function AccountField({ label, value }: { label: string; value: string }) { return <div><span style={labelStyle}>{label}</span><div style={valueStyle}>{value}</div></div>; }
-function formatLicenseDate(value?: string) { if (!value) return 'Renews with subscription'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(); }
+function formatLicenseDate(value?: string) { if (!value) return 'Managed by subscription'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
 function maskIdentifier(value?: string) { if (!value) return 'Available'; return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value; }
-function titleCase(value: string) { return value ? value.charAt(0).toUpperCase() + value.slice(1) : value; }
+function titleCase(value: string) { return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function statusForReason(reason: string) { if (reason === 'inactive') return 'Inactive'; if (reason === 'not_fulfilled') return 'Pending fulfillment'; if (reason === 'no_purchase') return 'No subscription'; if (reason === 'stripe_unavailable') return 'Temporarily unavailable'; return 'Not active'; }
 function entitlementMessage(reason: string) { if (reason === 'no_purchase') return 'No TenantIQ purchase was found for this email address.'; if (reason === 'inactive') return 'The TenantIQ subscription associated with this account is not active.'; if (reason === 'not_fulfilled') return 'The subscription exists, but TenantIQ fulfillment has not completed yet.'; if (reason === 'stripe_unavailable') return 'TenantIQ could not verify subscription status right now. Please try again shortly.'; return 'TenantIQ could not confirm an active entitlement for this account.'; }
 function Notice({ text, error = false }: { text: string; error?: boolean }) { return <div style={{ marginBottom: 18, border: `1px solid ${error ? 'rgba(248,113,113,.28)' : 'rgba(74,222,128,.25)'}`, background: error ? 'rgba(248,113,113,.08)' : 'rgba(74,222,128,.08)', color: error ? '#fca5a5' : '#86efac', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>{text}</div>; }
 
@@ -156,4 +189,5 @@ const fieldLabelStyle = { display: 'grid', gap: 6, color: '#cbd7e7', fontSize: 1
 const inputStyle = { border: '1px solid rgba(86,160,255,.26)', borderRadius: 10, background: '#081425', color: '#f3f6fb', padding: '12px 13px', outline: 'none' };
 const primaryButtonStyle = { width: 'fit-content', border: 0, borderRadius: 10, padding: '11px 15px', fontSize: 14, fontWeight: 800, background: '#2b69b8', color: '#fff', cursor: 'pointer' };
 const secondaryButtonStyle = { border: '1px solid rgba(86,160,255,.28)', borderRadius: 10, padding: '11px 15px', fontSize: 14, fontWeight: 800, background: 'transparent', color: '#c8ddf7', cursor: 'pointer' };
-const primaryLinkStyle = { display: 'inline-block', borderRadius: 9, padding: '9px 13px', background: '#2b69b8', color: '#fff', textDecoration: 'none', fontWeight: 800 };
+const primaryLinkStyle = { display: 'inline-block', borderRadius: 9, padding: '10px 14px', background: '#2f87ff', color: '#fff', textDecoration: 'none', fontWeight: 850, fontSize: 13 };
+const secondaryLinkStyle = { display: 'inline-block', borderRadius: 9, padding: '9px 13px', border: '1px solid rgba(86,160,255,.28)', color: '#9dcbff', textDecoration: 'none', fontWeight: 800, fontSize: 13 };

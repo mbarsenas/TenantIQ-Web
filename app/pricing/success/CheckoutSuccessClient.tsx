@@ -20,13 +20,15 @@ export default function CheckoutSuccessClient() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const sessionId = new URLSearchParams(window.location.search).get('session_id')?.trim();
-    if (!sessionId) {
+    const sessionIdParam = new URLSearchParams(window.location.search).get('session_id')?.trim();
+    if (!sessionIdParam) {
       setError('Checkout completed, but the Stripe session identifier is missing from this return URL.');
       setChecking(false);
       return;
     }
 
+    // Copy the narrowed value so TypeScript knows the async callback always receives a string.
+    const sessionId: string = sessionIdParam;
     let cancelled = false;
     let attempts = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;

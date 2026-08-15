@@ -3,31 +3,102 @@ import TenantIQAppNav from '../../components/TenantIQAppNav';
 import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 import { knowledgeWorkloads } from '../../lib/knowledge-catalog';
 
-const workloads = [
-  ['Entra ID', 'Identity, authentication, access, and directory posture.'],
-  ['Exchange Online', 'Mail flow, authentication, transport, and messaging security guidance.'],
-  ['SharePoint Online', 'Sharing, governance, permissions, and collaboration controls.'],
-  ['Teams', 'Meetings, messaging, external access, and collaboration policy guidance.'],
-  ['OneDrive', 'Sharing, device access, sync, and personal storage controls.'],
-  ['Intune', 'Device compliance, configuration, application, and endpoint management guidance.'],
-  ['Defender', 'Microsoft 365 security controls, protection, alerting, and response guidance.'],
-  ['Microsoft Purview', 'Audit, retention, data governance, compliance, and information protection guidance.'],
+const workloadCards = [
+  { name: 'Entra ID', slug: 'entra', description: 'Identity, authentication, Conditional Access, applications, and governance guidance.', explicitCount: 8 },
+  { name: 'Exchange Online', slug: 'exchange', description: 'Mail flow, authentication, transport, and messaging security guidance.', explicitCount: 10 },
+  { name: 'SharePoint Online', slug: 'sharepoint', description: 'Sharing, governance, permissions, lifecycle, and collaboration controls.' },
+  { name: 'Teams', slug: 'teams', description: 'Meetings, messaging, external access, devices, apps, and collaboration policy guidance.' },
+  { name: 'OneDrive', slug: 'onedrive', description: 'Sharing, device access, sync, lifecycle, recovery, and personal storage controls.' },
+  { name: 'Intune', slug: 'intune', description: 'Device compliance, enrollment, configuration, application, endpoint, and Windows management guidance.' },
+  { name: 'Defender', slug: 'defender', description: 'Email protection, endpoint security, identity protection, incidents, hunting, and response guidance.' },
+  { name: 'Microsoft Purview', slug: 'purview', description: 'Audit, retention, information protection, DLP, records, eDiscovery, and compliance guidance.' },
 ] as const;
-const exchangeArticles = [['EXO-MF-001','Accepted Domains','Mail Flow'],['EXO-MF-002','Connectors','Mail Flow'],['EXO-MF-003','DKIM','Mail Authentication'],['EXO-MF-004','DMARC','Mail Authentication'],['EXO-MF-005','Remote Domains','Mail Flow'],['EXO-SEC-001','Anti-Spam Policies','Security'],['EXO-SEC-002','Authentication Policies','Authentication'],['EXO-SEC-003','External Forwarding','Security'],['EXO-SEC-004','Mailbox Auditing','Security'],['EXO-SEC-005','SMTP AUTH','Authentication']] as const;
 
-function workloadHref(name: string) {
-  if (name === 'Entra ID') return '/knowledge/entra';
-  if (name === 'Exchange Online') return '#exchange-guidance';
-  const match = knowledgeWorkloads.find((item) => item.name === name);
-  return match ? `/knowledge/${match.slug}` : '/assistant';
+function indexedCount(name: string, explicitCount?: number) {
+  if (explicitCount) return explicitCount;
+  return knowledgeWorkloads.find((item) => item.name === name)?.controls.length || 0;
 }
 
-export default async function KnowledgePage(){
- const {session,entitlement}=await requireTenantIQEntitlement(); if(!session?.user?.id)redirect('/signin'); if(!entitlement.entitled)redirect('/license-required');
- return <main style={{minHeight:'100vh',background:'linear-gradient(180deg,#07111f 0%,#0d1321 100%)',color:'#f3f6fb'}}><TenantIQAppNav active="knowledge"/><div style={{width:'min(1100px,100%)',margin:'0 auto',padding:'40px 20px 72px'}}>
- <div style={{marginBottom:28}}><div style={{color:'#6eb5ff',fontSize:12,fontWeight:900,letterSpacing:'.08em',textTransform:'uppercase'}}>TenantIQ knowledge base</div><h1 style={{fontSize:'clamp(34px,6vw,56px)',margin:'10px 0 12px',lineHeight:1.05}}>Microsoft 365 guidance, organized by workload.</h1><p style={{margin:0,color:'#aeb8c8',fontSize:16,lineHeight:1.65,maxWidth:820}}>TenantIQ uses its knowledge base to support assessment interpretation, remediation guidance, and validation context in the Knowledge Assistant. The remaining workloads now use one shared data-driven page and article system instead of hand-built routes.</p></div>
- <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:14}}>{workloads.map(([name,description])=>{const href=workloadHref(name);const match=knowledgeWorkloads.find((item)=>item.name===name);return <article key={name} style={{border:'1px solid rgba(86,160,255,.2)',borderRadius:16,background:'rgba(8,22,40,.68)',padding:20,minHeight:170,display:'flex',flexDirection:'column',justifyContent:'space-between'}}><div><div style={{color:'#6eb5ff',fontSize:11,fontWeight:900,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:8}}>Workload guidance</div><h2 style={{margin:'0 0 10px',fontSize:21}}>{name}</h2><p style={{margin:0,color:'#9fb0c2',lineHeight:1.55,fontSize:14}}>{description}</p>{match?<div style={{marginTop:10,color:'#6f8eae',fontSize:11,fontWeight:800}}>{match.controls.length} controls indexed</div>:null}</div><a href={href} style={{marginTop:18,color:'#78b8ff',fontSize:13,fontWeight:850,textDecoration:'none'}}>View guidance →</a></article>})}</section>
- <section id="exchange-guidance" style={{marginTop:28,border:'1px solid rgba(86,160,255,.2)',borderRadius:16,background:'rgba(8,22,40,.68)',padding:22}}><div style={{color:'#6eb5ff',fontSize:11,fontWeight:900,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:8}}>Exchange Online knowledge</div><h2 style={{margin:'0 0 8px',fontSize:27}}>Assessment guidance</h2><p style={{margin:'0 0 20px',color:'#9fb0c2',lineHeight:1.6,fontSize:14,maxWidth:780}}>TenantIQ maintains check-specific Exchange Online guidance used to explain findings, remediation intent, and validation context. All listed controls have a knowledge article.</p><div style={{display:'grid',gap:8}}>{exchangeArticles.map(([id,title,category])=><div key={id} style={{display:'grid',gridTemplateColumns:'minmax(110px,.7fr) minmax(180px,1.6fr) minmax(120px,1fr) auto',gap:14,alignItems:'center',borderTop:'1px solid rgba(86,160,255,.13)',padding:'13px 4px'}}><div style={{color:'#79baff',fontSize:12,fontWeight:900}}>{id}</div><div style={{color:'#f2f6fb',fontSize:14,fontWeight:800}}>{title}</div><div style={{color:'#8fa4ba',fontSize:12}}>{category}</div><a href={id==='EXO-MF-003'?'/knowledge/exchange/exo-mf-003':`/knowledge/exchange/${id.toLowerCase()}`} style={{color:'#78b8ff',fontSize:12,fontWeight:850,textDecoration:'none',whiteSpace:'nowrap'}}>Read article →</a></div>)}</div></section>
- <section style={{marginTop:24,border:'1px solid rgba(86,160,255,.2)',borderRadius:16,background:'rgba(8,22,40,.68)',padding:22}}><div style={{color:'#6eb5ff',fontSize:11,fontWeight:900,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:8}}>How to use it</div><h2 style={{margin:'0 0 10px',fontSize:24}}>Start with the assessment, then use the knowledge.</h2><p style={{margin:0,color:'#9fb0c2',lineHeight:1.6,fontSize:14}}>Open a stored assessment, select a finding, and send it to the Assistant. TenantIQ combines that assessment evidence with relevant knowledge-base guidance so the answer stays grounded in the tenant data you selected.</p></section>
- </div></main>;
+export default async function KnowledgePage() {
+  const { session, entitlement } = await requireTenantIQEntitlement();
+  if (!session?.user?.id) redirect('/signin');
+  if (!entitlement.entitled) redirect('/license-required');
+
+  const totalControls = workloadCards.reduce((sum, workload) => sum + indexedCount(workload.name, workload.explicitCount), 0);
+
+  return (
+    <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
+      <TenantIQAppNav active="knowledge" />
+      <div style={{ width: 'min(1120px,100%)', margin: '0 auto', padding: '40px 20px 72px' }}>
+        <header style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 20, alignItems: 'end', marginBottom: 28 }}>
+          <div>
+            <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ knowledge base</div>
+            <h1 style={{ fontSize: 'clamp(34px,6vw,56px)', margin: '10px 0 12px', lineHeight: 1.05 }}>Microsoft 365 guidance, organized by workload.</h1>
+            <p style={{ margin: 0, color: '#aeb8c8', fontSize: 16, lineHeight: 1.65, maxWidth: 840 }}>Use the knowledge library to understand what a TenantIQ control represents, how to validate the finding, and how to approach remediation. Tenant-specific facts still come from the assessment you selected.</p>
+          </div>
+          <a href="/assistant" style={primaryLinkStyle}>Open Assistant</a>
+        </header>
+
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 24 }} aria-label="Knowledge coverage summary">
+          <Metric label="Supported workloads" value="8" />
+          <Metric label="Indexed controls" value={String(totalControls)} />
+          <Metric label="Knowledge mode" value="Read-only" />
+          <Metric label="Tenant evidence" value="Assessment-bound" />
+        </section>
+
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(245px,1fr))', gap: 14 }}>
+          {workloadCards.map((workload) => {
+            const count = indexedCount(workload.name, workload.explicitCount);
+            return (
+              <article key={workload.name} style={{ border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 20, minHeight: 190, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Workload guidance</div>
+                  <h2 style={{ margin: '0 0 10px', fontSize: 21 }}>{workload.name}</h2>
+                  <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.55, fontSize: 14 }}>{workload.description}</p>
+                  <div style={{ marginTop: 12, color: '#79a7d2', fontSize: 12, fontWeight: 850 }}>{count} controls indexed</div>
+                </div>
+                <a href={`/knowledge/${workload.slug}`} style={{ marginTop: 18, color: '#78b8ff', fontSize: 13, fontWeight: 850, textDecoration: 'none' }}>View {workload.name} guidance →</a>
+              </article>
+            );
+          })}
+        </section>
+
+        <section style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
+          <article style={panelStyle}>
+            <div style={eyebrowStyle}>Assessment workflow</div>
+            <h2 style={{ margin: '8px 0 10px', fontSize: 23 }}>Start with a finding</h2>
+            <p style={bodyStyle}>Open a stored assessment, review the evidence for a finding, then use its knowledge article to understand the control and remediation intent.</p>
+            <a href="/assessments" style={secondaryLinkStyle}>Browse assessments →</a>
+          </article>
+          <article style={panelStyle}>
+            <div style={eyebrowStyle}>Assistant workflow</div>
+            <h2 style={{ margin: '8px 0 10px', fontSize: 23 }}>Ask with tenant context</h2>
+            <p style={bodyStyle}>Knowledge articles can hand a control directly to the Assistant. The Assistant then combines that question with whichever assessment you select.</p>
+            <a href="/assistant" style={secondaryLinkStyle}>Open Assistant →</a>
+          </article>
+        </section>
+
+        <section style={{ marginTop: 20, border: '1px solid rgba(255,196,64,.22)', borderRadius: 16, background: 'rgba(255,196,64,.04)', padding: 22 }}>
+          <div style={{ color: '#ffd35a', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' }}>Evidence guardrail</div>
+          <h2 style={{ margin: '8px 0 8px', fontSize: 23 }}>Knowledge explains the control; the assessment supplies the tenant facts.</h2>
+          <p style={{ margin: 0, color: '#b4c1cf', lineHeight: 1.65, fontSize: 14 }}>Statuses, severity, counts, users, policies, objects, configuration values, and scope must come from the selected assessment. The knowledge library supplies interpretation and remediation context without inventing tenant-specific evidence.</p>
+        </section>
+      </div>
+    </main>
+  );
 }
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ border: '1px solid rgba(86,160,255,.17)', borderRadius: 14, background: 'rgba(8,22,40,.66)', padding: 15 }}>
+      <div style={{ color: '#8192a6', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+      <div style={{ color: '#eef5fd', fontSize: 22, fontWeight: 900, marginTop: 6 }}>{value}</div>
+    </div>
+  );
+}
+
+const panelStyle = { border: '1px solid rgba(86,160,255,.2)', borderRadius: 16, background: 'rgba(8,22,40,.68)', padding: 22 };
+const eyebrowStyle = { color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' as const };
+const bodyStyle = { margin: '0 0 18px', color: '#9fb0c2', lineHeight: 1.6, fontSize: 14 };
+const primaryLinkStyle = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 16px', borderRadius: 10, background: '#2f87ff', color: '#fff', fontSize: 13, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' as const };
+const secondaryLinkStyle = { color: '#78b8ff', fontSize: 13, fontWeight: 850, textDecoration: 'none' };

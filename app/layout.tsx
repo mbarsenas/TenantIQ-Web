@@ -6,8 +6,34 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TenantIQ | Microsoft 365 Tenant Intelligence",
-  description: "TenantIQ provides automated, read-only Microsoft 365 tenant assessments with prioritized findings, risk insights, and actionable recommendations.",
+  metadataBase: new URL("https://tenantiq365.com"),
+  title: {
+    default: "TenantIQ | Microsoft 365 Tenant Intelligence",
+    template: "%s | TenantIQ",
+  },
+  description:
+    "TenantIQ provides automated, read-only Microsoft 365 tenant assessments with prioritized findings, risk insights, and actionable recommendations.",
+  applicationName: "TenantIQ",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "TenantIQ",
+    title: "TenantIQ | Microsoft 365 Tenant Intelligence",
+    description:
+      "Automated, read-only Microsoft 365 tenant assessments with prioritized findings, risk insights, and actionable recommendations.",
+  },
+  twitter: {
+    card: "summary",
+    title: "TenantIQ | Microsoft 365 Tenant Intelligence",
+    description:
+      "Automated, read-only Microsoft 365 tenant assessments with prioritized findings and actionable recommendations.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

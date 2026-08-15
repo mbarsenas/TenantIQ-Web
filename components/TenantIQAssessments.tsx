@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { TENANTIQ_WORKLOADS, tenantIQWorkloadLabel } from '../lib/tenantiq-workloads';
 
 type AssessmentSummary = {
   assessment_id: string;
@@ -9,30 +10,6 @@ type AssessmentSummary = {
   finding_count: number;
   metadata?: Record<string, unknown>;
 };
-
-const WORKLOADS = [
-  'Entra ID',
-  'Exchange Online',
-  'SharePoint Online',
-  'Teams',
-  'OneDrive',
-  'Intune',
-  'Defender',
-  'Microsoft Purview',
-] as const;
-
-function workloadFromName(name: string) {
-  const value = name.toLowerCase();
-  if (value.includes('exchange')) return 'Exchange Online';
-  if (value.includes('entra') || value.includes('azuread') || value.includes('azure-ad')) return 'Entra ID';
-  if (value.includes('sharepoint')) return 'SharePoint Online';
-  if (value.includes('teams')) return 'Teams';
-  if (value.includes('onedrive')) return 'OneDrive';
-  if (value.includes('intune')) return 'Intune';
-  if (value.includes('defender')) return 'Defender';
-  if (value.includes('purview')) return 'Microsoft Purview';
-  return 'TenantIQ assessment';
-}
 
 async function readPayload(response: Response) {
   const text = await response.text();
@@ -52,7 +29,7 @@ export default function TenantIQAssessments() {
     const response = await fetch('/api/assistant/assessments', { cache: 'no-store' });
     const payload = await readPayload(response);
     if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ assessments.');
-    const next = Array.isArray(payload) ? (payload as AssessmentSummary[]) : [];
+    const next = Array.isArray(payload) ? payload as AssessmentSummary[] : [];
     next.sort((a, b) => new Date(b.imported_at || 0).getTime() - new Date(a.imported_at || 0).getTime());
     setItems(next);
   }
@@ -69,7 +46,7 @@ export default function TenantIQAssessments() {
     if (!file) return;
 
     const extension = file.name.split('.').pop()?.toLowerCase();
-    if (extension !== 'csv' && extension !== 'json') {
+    if (!['csv', 'json'].includes(extension || '')) {
       setError('TenantIQ assessment uploads must be CSV or JSON files.');
       return;
     }
@@ -77,17 +54,12 @@ export default function TenantIQAssessments() {
     setUploading(true);
     setUploadStatus(`Uploading ${file.name}…`);
     setError('');
-
     try {
       const formData = new FormData();
       formData.append('file', file, file.name);
-      const response = await fetch('/api/assistant/assessments/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await fetch('/api/assistant/assessments/upload', { method: 'POST', body: formData });
       const payload = await readPayload(response);
       if (!response.ok) throw new Error(payload?.detail || 'TenantIQ could not import this assessment.');
-
       await refreshAssessments();
       setUploadStatus(`Imported ${file.name} · ${Number(payload?.finding_count || 0)} findings`);
     } catch (err) {
@@ -99,111 +71,83 @@ export default function TenantIQAssessments() {
   }
 
   const totalFindings = useMemo(() => items.reduce((sum, item) => sum + Number(item.finding_count || 0), 0), [items]);
-
   const workloadCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
-      const workload = workloadFromName(item.source_name || item.assessment_id);
-      if (WORKLOADS.includes(workload as (typeof WORKLOADS)[number])) {
-        counts.set(workload, (counts.get(workload) || 0) + 1);
-      }
+      const workload = tenantIQWorkloadLabel(item.source_name || item.assessment_id, '');
+      if (workload) counts.set(workload, (counts.get(workload) || 0) + 1);
     }
     return counts;
   }, [items]);
-
-  const coveredWorkloads = WORKLOADS.filter((workload) => workloadCounts.has(workload)).length;
+  const coveredWorkloads = TENANTIQ_WORKLOADS.filter((workload) => workloadCounts.has(workload.label)).length;
 
   if (loading) return <div style={noticeStyle}>Loading your TenantIQ assessments…</div>;
 
-  return (
-    <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv,.json,text/csv,application/json"
-        onChange={uploadAssessment}
-        style={{ display: 'none' }}
-      />
+  return <>
+    <input ref={fileInputRef} type="file" accept=".csv,.json,text/csv,application/json" onChange={uploadAssessment} style={{ display: 'none' }} />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
-        <div style={{ color: '#91a4b9', fontSize: 13, lineHeight: 1.55 }}>
-          Upload TenantIQ CSV or JSON assessment output. Imported assessments are stored in your licensed workspace and remain available after sign-out.
-        </div>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          style={{ ...primaryButtonStyle, opacity: uploading ? .65 : 1, cursor: uploading ? 'wait' : 'pointer' }}
-        >
-          {uploading ? 'Uploading…' : 'Upload assessment'}
-        </button>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
+      <div style={{ color: '#91a4b9', fontSize: 13, lineHeight: 1.55 }}>
+        Upload TenantIQ CSV or JSON assessment output. Imported assessments are stored in your licensed workspace and remain available after sign-out.
       </div>
+      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ ...primaryButtonStyle, opacity: uploading ? .65 : 1, cursor: uploading ? 'wait' : 'pointer' }}>
+        {uploading ? 'Uploading…' : 'Upload assessment'}
+      </button>
+    </div>
 
-      {uploadStatus ? <div style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(52,211,153,.25)', color: '#9ce6ba' }}>{uploadStatus}</div> : null}
-      {error ? <div style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(255,90,90,.28)', color: '#ffaaaa' }}>{error}</div> : null}
+    {uploadStatus ? <div style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(52,211,153,.25)', color: '#9ce6ba' }}>{uploadStatus}</div> : null}
+    {error ? <div style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(255,90,90,.28)', color: '#ffaaaa' }}>{error}</div> : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 18 }}>
-        <Metric label="Stored assessments" value={String(items.length)} />
-        <Metric label="Findings stored" value={String(totalFindings)} />
-        <Metric label="Workload coverage" value={`${coveredWorkloads}/8`} />
-        <Metric label="Workspace status" value={items.length ? 'Ready' : 'Empty'} />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 18 }}>
+      <Metric label="Stored assessments" value={String(items.length)} />
+      <Metric label="Findings stored" value={String(totalFindings)} />
+      <Metric label="Workload coverage" value={`${coveredWorkloads}/8`} />
+      <Metric label="Workspace status" value={items.length ? 'Ready' : 'Empty'} />
+    </div>
+
+    <section style={{ ...noticeStyle, marginBottom: 22 }} aria-label="Assessment workload coverage">
+      <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 10 }}>Microsoft 365 workload coverage</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 8 }}>
+        {TENANTIQ_WORKLOADS.map(({ label }) => {
+          const count = workloadCounts.get(label) || 0;
+          return <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '9px 11px', borderRadius: 10, background: count ? 'rgba(47,135,255,.07)' : 'rgba(255,255,255,.02)', border: `1px solid ${count ? 'rgba(86,160,255,.18)' : 'rgba(255,255,255,.05)'}` }}>
+            <span style={{ color: count ? '#dbeaff' : '#73859a', fontSize: 13, fontWeight: 750 }}>{label}</span>
+            <span style={{ color: count ? '#8fc7ff' : '#66788c', fontSize: 11, fontWeight: 850 }}>{count ? `${count} stored` : 'Not uploaded'}</span>
+          </div>;
+        })}
       </div>
+    </section>
 
-      <section style={{ ...noticeStyle, marginBottom: 22 }} aria-label="Assessment workload coverage">
-        <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 10 }}>Microsoft 365 workload coverage</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 8 }}>
-          {WORKLOADS.map((workload) => {
-            const count = workloadCounts.get(workload) || 0;
-            return (
-              <div key={workload} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '9px 11px', borderRadius: 10, background: count ? 'rgba(47,135,255,.07)' : 'rgba(255,255,255,.02)', border: `1px solid ${count ? 'rgba(86,160,255,.18)' : 'rgba(255,255,255,.05)'}` }}>
-                <span style={{ color: count ? '#dbeaff' : '#73859a', fontSize: 13, fontWeight: 750 }}>{workload}</span>
-                <span style={{ color: count ? '#8fc7ff' : '#66788c', fontSize: 11, fontWeight: 850 }}>{count ? `${count} stored` : 'Not uploaded'}</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {items.length === 0 ? (
-        <div style={emptyStyle}>
-          <h2 style={{ margin: '0 0 8px', fontSize: 22 }}>No assessments yet</h2>
-          <p style={{ margin: '0 0 18px', color: '#9eacbd', lineHeight: 1.6 }}>Upload your first TenantIQ assessment to begin building assessment history and tenant-wide posture.</p>
-          <button type="button" onClick={() => fileInputRef.current?.click()} style={{ ...primaryButtonStyle, cursor: 'pointer' }}>Upload first assessment</button>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {items.map((item) => {
-            const name = item.source_name || item.assessment_id;
-            const workload = workloadFromName(name);
-            const imported = item.imported_at ? new Date(item.imported_at).toLocaleString() : 'Import time unavailable';
-            const validated = item.metadata?.validated === true;
-            const assistantHref = `/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment_id)}`;
-            const detailHref = `/assessments/${encodeURIComponent(item.assessment_id)}`;
-            return (
-              <article key={item.assessment_id} style={cardStyle}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-                    <span style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' }}>{workload}</span>
-                    {validated ? <span style={{ borderRadius: 999, padding: '4px 8px', background: 'rgba(52,211,153,.10)', color: '#86e1ad', fontSize: 11, fontWeight: 800 }}>Validated</span> : null}
-                  </div>
-                  <h2 style={{ margin: 0, fontSize: 18, color: '#f1f6fc', overflowWrap: 'anywhere' }}>{name}</h2>
-                  <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, color: '#8fa0b4', fontSize: 13 }}>
-                    <span>{item.finding_count} findings</span>
-                    <span>{imported}</span>
-                  </div>
-                  <div title={item.assessment_id} style={{ marginTop: 8, color: '#63758a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, overflowWrap: 'anywhere' }}>{item.assessment_id}</div>
-                </div>
-                <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <a href={detailHref} style={secondaryLinkStyle}>View findings</a>
-                  <a href={assistantHref} style={primaryLinkStyle}>Open Assistant</a>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </>
-  );
+    {!items.length ? <div style={emptyStyle}>
+      <h2 style={{ margin: '0 0 8px', fontSize: 22 }}>No assessments yet</h2>
+      <p style={{ margin: '0 0 18px', color: '#9eacbd', lineHeight: 1.6 }}>Upload your first TenantIQ assessment to begin building assessment history and tenant-wide posture.</p>
+      <button type="button" onClick={() => fileInputRef.current?.click()} style={{ ...primaryButtonStyle, cursor: 'pointer' }}>Upload first assessment</button>
+    </div> : <div style={{ display: 'grid', gap: 12 }}>
+      {items.map((item) => {
+        const name = item.source_name || item.assessment_id;
+        const workload = tenantIQWorkloadLabel(name);
+        const imported = item.imported_at ? new Date(item.imported_at).toLocaleString() : 'Import time unavailable';
+        const validated = item.metadata?.validated === true;
+        const assistantHref = `/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment_id)}`;
+        const detailHref = `/assessments/${encodeURIComponent(item.assessment_id)}`;
+        return <article key={item.assessment_id} style={cardStyle}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' }}>{workload}</span>
+              {validated ? <span style={{ borderRadius: 999, padding: '4px 8px', background: 'rgba(52,211,153,.10)', color: '#86e1ad', fontSize: 11, fontWeight: 800 }}>Validated</span> : null}
+            </div>
+            <h2 style={{ margin: 0, fontSize: 18, color: '#f1f6fc', overflowWrap: 'anywhere' }}>{name}</h2>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, color: '#8fa0b4', fontSize: 13 }}><span>{item.finding_count} findings</span><span>{imported}</span></div>
+            <div title={item.assessment_id} style={{ marginTop: 8, color: '#63758a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, overflowWrap: 'anywhere' }}>{item.assessment_id}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
+            <a href={detailHref} style={secondaryLinkStyle}>View findings</a>
+            <a href={assistantHref} style={primaryLinkStyle}>Open AI Assistant</a>
+          </div>
+        </article>;
+      })}
+    </div>}
+  </>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

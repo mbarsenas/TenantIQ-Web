@@ -10,9 +10,20 @@ function readCookie(name: string) {
   return value ? decodeURIComponent(value.slice(prefix.length)) : '';
 }
 
+function questionFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const explicitQuestion = params.get('question')?.trim();
+  if (explicitQuestion) return explicitQuestion;
+
+  const finding = params.get('finding')?.trim();
+  if (finding) return `Explain ${finding}, why it matters, and what needs to be fixed.`;
+
+  return '';
+}
+
 export default function TenantIQAssistantPrefill() {
   useEffect(() => {
-    const question = readCookie(COOKIE_NAME);
+    const question = questionFromQuery() || readCookie(COOKIE_NAME);
     if (!question) return;
 
     let attempts = 0;

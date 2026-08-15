@@ -1,18 +1,19 @@
-const text = { maxWidth: 820, margin: "0 auto", padding: "64px 24px 96px", fontFamily: "Inter, Arial, sans-serif", color: "#182033", lineHeight: 1.7 };
-export const metadata = { title: "Terms" };
-export default function TermsPage() {
-  return <main style={text}>
-    <a href="/" style={{ color: "#2563EB" }}>← TenantIQ</a>
-    <h1>Website & Early Access Terms</h1>
-    <p><strong>Last updated:</strong> August 11, 2026</p>
-    <p>TenantIQ is currently presented as an early access Microsoft 365 assessment product. Website content, sample reports, check counts, supported capabilities, and product behavior may change as the product develops.</p>
-    <h2>Assessment guidance</h2>
-    <p>TenantIQ findings and recommendations are technical decision-support information. They do not replace your organization’s change-management, security, compliance, legal, or operational review processes. Tenant administrators remain responsible for approving and implementing changes.</p>
-    <h2>Sample content</h2>
-    <p>Public samples are sanitized and abbreviated for demonstration. They should not be interpreted as an assessment of any real organization.</p>
-    <h2>Microsoft trademarks</h2>
-    <p>Microsoft 365 and related product names are trademarks of Microsoft Corporation. TenantIQ is an independent product and is not affiliated with or endorsed by Microsoft.</p>
-    <h2>Availability</h2>
-    <p>Submitting an early access request does not guarantee access, availability, pricing, or a specific delivery date.</p>
-  </main>;
-}
+export const metadata = { title: "Terms | TenantIQ" };
+const page={minHeight:"100vh",background:"linear-gradient(180deg,#07111f 0%,#0d1321 100%)",color:"#e8eef7",fontFamily:"Inter,Arial,sans-serif"};
+const wrap={maxWidth:860,margin:"0 auto",padding:"52px 24px 96px",lineHeight:1.72};
+const muted={color:"#a7b4c5"};
+export default function TermsPage(){return <main style={page}><article style={wrap}>
+<a href="/" style={{color:"#78b8ff",textDecoration:"none",fontWeight:700}}>← TenantIQ</a>
+<div style={{color:"#6eb5ff",fontSize:12,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",marginTop:34}}>Legal</div>
+<h1 style={{fontSize:"clamp(36px,6vw,54px)",margin:"8px 0 8px"}}>TenantIQ Terms</h1><p style={muted}><strong>Last updated:</strong> August 14, 2026</p>
+<p>These terms govern access to the TenantIQ website, subscription, licensed workspace, assessment features, Knowledge Assistant, Workflow, and related materials.</p>
+<h2>Licensed use</h2><p style={muted}>TenantIQ access is subject to the edition, tenant allowance, subscription status, and license information associated with the customer purchase. Customers are responsible for using the product only within their licensed scope.</p>
+<h2>Assessment operation</h2><p style={muted}>TenantIQ is designed as a read-only Microsoft 365 assessment and decision-support product. Findings, evidence, recommendations, and generated guidance do not perform configuration changes automatically. Administrators remain responsible for reviewing, approving, testing, implementing, and validating any remediation.</p>
+<h2>Knowledge Assistant</h2><p style={muted}>The Knowledge Assistant provides AI-assisted technical guidance grounded in selected TenantIQ assessment data and TenantIQ knowledge content. Generated responses may be incomplete or incorrect and must be reviewed by a qualified administrator before use in production.</p>
+<h2>Customer responsibilities</h2><p style={muted}>Customers are responsible for securing their accounts, maintaining appropriate Microsoft 365 permissions, obtaining authorization to assess each tenant, protecting exported or uploaded assessment data, and following their own change-management, security, compliance, and legal requirements.</p>
+<h2>Subscriptions and availability</h2><p style={muted}>Paid features require an active, fulfilled TenantIQ subscription. Product capabilities, supported checks, service providers, and pricing may change over time. TenantIQ may suspend access when a subscription is inactive, a license is invalid, or use creates a security or operational risk.</p>
+<h2>Sample and informational content</h2><p style={muted}>Public samples are provided for demonstration and may be sanitized or abbreviated. They should not be interpreted as an assessment of a real organization unless expressly identified as such.</p>
+<h2>Microsoft relationship</h2><p style={muted}>Microsoft 365 and related product names are trademarks of Microsoft Corporation. TenantIQ is an independent product and is not affiliated with or endorsed by Microsoft.</p>
+<h2>No substitute for professional review</h2><p style={muted}>TenantIQ provides technical decision-support information. It does not replace professional legal, compliance, audit, security, or business advice, and it does not guarantee that a tenant is secure or compliant.</p>
+<div style={{marginTop:38,paddingTop:18,borderTop:"1px solid rgba(86,160,255,.18)",display:"flex",gap:18,flexWrap:"wrap"}}><a href="/privacy" style={{color:"#78b8ff"}}>Privacy</a><a href="/security" style={{color:"#78b8ff"}}>Security</a><a href="/pricing" style={{color:"#78b8ff"}}>Pricing</a></div>
+</article></main>;}

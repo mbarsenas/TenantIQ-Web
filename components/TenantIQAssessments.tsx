@@ -11,10 +11,24 @@ type AssessmentSummary = {
   metadata?: Record<string, unknown>;
 };
 
+type UploadResult = {
+  fileName: string;
+  workload: string;
+  findingCount: number;
+  validated: boolean;
+  canonicalFindings: number;
+  canonicalRatio: number;
+};
+
 async function readPayload(response: Response) {
   const text = await response.text();
   if (!text) return null;
   try { return JSON.parse(text); } catch { throw new Error('TenantIQ received an unexpected response while loading assessments.'); }
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export default function TenantIQAssessments() {
@@ -22,7 +36,7 @@ export default function TenantIQAssessments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState('');
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function refreshAssessments() {
@@ -52,7 +66,7 @@ export default function TenantIQAssessments() {
     }
 
     setUploading(true);
-    setUploadStatus(`Uploading ${file.name}…`);
+    setUploadResult(null);
     setError('');
     try {
       const formData = new FormData();
@@ -60,10 +74,24 @@ export default function TenantIQAssessments() {
       const response = await fetch('/api/assistant/assessments/upload', { method: 'POST', body: formData });
       const payload = await readPayload(response);
       if (!response.ok) throw new Error(payload?.detail || 'TenantIQ could not import this assessment.');
+
+      const metadata = payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata as Record<string, unknown> : {};
+      const findingCount = numberValue(payload?.finding_count);
+      const canonicalFindings = numberValue(metadata.canonical_findings, findingCount);
+      const canonicalRatio = numberValue(metadata.canonical_ratio, findingCount ? canonicalFindings / findingCount : 0);
+      const sourceName = String(payload?.source_name || metadata.original_filename || file.name);
+
+      setUploadResult({
+        fileName: file.name,
+        workload: tenantIQWorkloadLabel(sourceName, 'Recognized TenantIQ assessment'),
+        findingCount,
+        validated: metadata.validated === true,
+        canonicalFindings,
+        canonicalRatio,
+      });
       await refreshAssessments();
-      setUploadStatus(`Imported ${file.name} · ${Number(payload?.finding_count || 0)} findings`);
     } catch (err) {
-      setUploadStatus('');
+      setUploadResult(null);
       setError(err instanceof Error ? err.message : 'Unable to upload the TenantIQ assessment.');
     } finally {
       setUploading(false);
@@ -95,7 +123,22 @@ export default function TenantIQAssessments() {
       </button>
     </div>
 
-    {uploadStatus ? <div style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(52,211,153,.25)', color: '#9ce6ba' }}>{uploadStatus}</div> : null}
+    {uploadResult ? <section style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(52,211,153,.28)', background: 'rgba(52,211,153,.045)' }} aria-label="Assessment import validation">
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ color: '#86e1ad', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase' }}>{uploadResult.validated ? 'Validated TenantIQ assessment' : 'Assessment imported'}</div>
+          <div style={{ color: '#e7f7ed', fontSize: 16, fontWeight: 850, marginTop: 5, overflowWrap: 'anywhere' }}>{uploadResult.fileName}</div>
+        </div>
+        <span style={{ borderRadius: 999, padding: '6px 10px', background: 'rgba(52,211,153,.10)', color: '#86e1ad', fontSize: 11, fontWeight: 900 }}>{uploadResult.workload}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginTop: 14 }}>
+        <ValidationField label="Findings imported" value={String(uploadResult.findingCount)} />
+        <ValidationField label="Canonical findings" value={`${uploadResult.canonicalFindings}/${uploadResult.findingCount}`} />
+        <ValidationField label="Canonical match" value={`${Math.round(uploadResult.canonicalRatio * 100)}%`} />
+        <ValidationField label="Validation" value={uploadResult.validated ? 'Passed' : 'Imported'} />
+      </div>
+    </section> : null}
+
     {error ? <div style={{ ...noticeStyle, marginBottom: 16, borderColor: 'rgba(255,90,90,.28)', color: '#ffaaaa' }}>{error}</div> : null}
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 18 }}>
@@ -128,13 +171,14 @@ export default function TenantIQAssessments() {
         const workload = tenantIQWorkloadLabel(name);
         const imported = item.imported_at ? new Date(item.imported_at).toLocaleString() : 'Import time unavailable';
         const validated = item.metadata?.validated === true;
+        const canonicalRatio = numberValue(item.metadata?.canonical_ratio, 0);
         const assistantHref = `/api/assistant/select-assessment?assessment=${encodeURIComponent(item.assessment_id)}`;
         const detailHref = `/assessments/${encodeURIComponent(item.assessment_id)}`;
         return <article key={item.assessment_id} style={cardStyle}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
               <span style={{ color: '#8fc7ff', fontSize: 12, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' }}>{workload}</span>
-              {validated ? <span style={{ borderRadius: 999, padding: '4px 8px', background: 'rgba(52,211,153,.10)', color: '#86e1ad', fontSize: 11, fontWeight: 800 }}>Validated</span> : null}
+              {validated ? <span style={{ borderRadius: 999, padding: '4px 8px', background: 'rgba(52,211,153,.10)', color: '#86e1ad', fontSize: 11, fontWeight: 800 }}>Validated{canonicalRatio ? ` · ${Math.round(canonicalRatio * 100)}% canonical` : ''}</span> : null}
             </div>
             <h2 style={{ margin: 0, fontSize: 18, color: '#f1f6fc', overflowWrap: 'anywhere' }}>{name}</h2>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, color: '#8fa0b4', fontSize: 13 }}><span>{item.finding_count} findings</span><span>{imported}</span></div>
@@ -148,6 +192,10 @@ export default function TenantIQAssessments() {
       })}
     </div>}
   </>;
+}
+
+function ValidationField({ label, value }: { label: string; value: string }) {
+  return <div style={{ border: '1px solid rgba(52,211,153,.14)', borderRadius: 10, padding: '10px 11px', background: 'rgba(2,18,20,.25)' }}><div style={{ color: '#7f9f93', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div><div style={{ color: '#dff8e8', fontSize: 15, fontWeight: 850, marginTop: 5 }}>{value}</div></div>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

@@ -22,9 +22,21 @@ export default function TenantIQPageShell({ mode }: { mode: PageMode }) {
     });
 
     document.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
-      if (button.textContent?.trim() === "View sample assessment") {
+      const label = button.textContent?.trim();
+
+      if (label === "View sample assessment") {
         button.onclick = () => {
           window.location.href = "/details#sample";
+        };
+      }
+
+      // The original marketing shell was built while TenantIQ was early access.
+      // Production subscriptions are now available, so public CTAs go directly
+      // to the pricing/checkout flow instead of opening the obsolete waitlist modal.
+      if (label === "Request early access") {
+        button.textContent = "View plans";
+        button.onclick = () => {
+          window.location.href = "/pricing";
         };
       }
     });

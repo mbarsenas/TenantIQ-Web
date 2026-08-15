@@ -36,6 +36,7 @@ export function tenantIQWorkloadKey(value: string): TenantIQWorkloadKey | '' {
 
   if (
     name.includes('entra-id') ||
+    name.includes('entraid') ||
     hasToken(name, 'entra') ||
     name.includes('azure-ad') ||
     name.includes('azuread') ||
@@ -51,24 +52,28 @@ export function tenantIQWorkloadKey(value: string): TenantIQWorkloadKey | '' {
 
   if (
     name.includes('microsoft-teams') ||
+    name.includes('microsoftteams') ||
     hasToken(name, 'teams') ||
     hasToken(name, 'team')
   ) return 'teams';
 
   if (
-    hasToken(name, 'onedrive') ||
+    name.includes('one-drive') ||
+    name.includes('onedrive') ||
     hasToken(name, 'od')
   ) return 'onedrive';
 
   if (
     hasToken(name, 'intune') ||
     name.includes('endpoint-manager') ||
+    name.includes('endpointmanager') ||
     name.includes('mem-intune')
   ) return 'intune';
 
   if (
     hasToken(name, 'defender') ||
     name.includes('microsoft-defender') ||
+    name.includes('microsoftdefender') ||
     hasToken(name, 'mdo') ||
     hasToken(name, 'mde') ||
     hasToken(name, 'mdatp')
@@ -77,7 +82,9 @@ export function tenantIQWorkloadKey(value: string): TenantIQWorkloadKey | '' {
   if (
     hasToken(name, 'purview') ||
     name.includes('microsoft-purview') ||
-    name.includes('compliance-center')
+    name.includes('microsoftpurview') ||
+    name.includes('compliance-center') ||
+    name.includes('compliancecenter')
   ) return 'purview';
 
   return '';

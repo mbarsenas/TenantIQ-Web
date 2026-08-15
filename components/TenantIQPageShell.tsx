@@ -21,25 +21,42 @@ export default function TenantIQPageShell({ mode }: { mode: PageMode }) {
       if (nextHref) link.setAttribute("href", nextHref);
     });
 
-    document.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+    const normalizeButtons = () => {
+      document.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+        const label = button.textContent?.trim();
+
+        if (label === "View sample assessment") {
+          button.onclick = () => {
+            window.location.href = "/details#sample";
+          };
+        }
+
+        if (label === "Request early access") {
+          button.textContent = "View plans";
+        }
+      });
+    };
+
+    normalizeButtons();
+
+    // TenantIQLandingV2 still contains its original React early-access handler.
+    // Intercept the production CTA before React's delegated click handler can
+    // open that legacy modal, and send the customer straight to pricing.
+    const handleClickCapture = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button") as HTMLButtonElement | null;
+      if (!button) return;
+
       const label = button.textContent?.trim();
-
-      if (label === "View sample assessment") {
-        button.onclick = () => {
-          window.location.href = "/details#sample";
-        };
+      if (label === "View plans" || label === "Request early access") {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.href = "/pricing";
       }
+    };
 
-      // The original marketing shell was built while TenantIQ was early access.
-      // Production subscriptions are now available, so public CTAs go directly
-      // to the pricing/checkout flow instead of opening the obsolete waitlist modal.
-      if (label === "Request early access") {
-        button.textContent = "View plans";
-        button.onclick = () => {
-          window.location.href = "/pricing";
-        };
-      }
-    });
+    document.addEventListener("click", handleClickCapture, true);
+    return () => document.removeEventListener("click", handleClickCapture, true);
   }, []);
 
   return (

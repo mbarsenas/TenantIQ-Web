@@ -7,7 +7,17 @@ type Finding = { check_id?: string; workload?: string; category?: string; status
 type FindingsPayload = { assessment_id: string; source_name?: string | null; imported_at?: string | null; findings: Finding[] };
 type WorkflowItem = Finding & { assessmentId: string; sourceName: string; importedAt?: string | null; workloadName: string };
 type WorkflowState = 'needs_review' | 'in_progress' | 'ready_to_validate' | 'resolved';
-type WorkflowRecord = { state: WorkflowState; checkId: string; title: string; workloadName: string; updatedAt: string; resolvedAt?: string };
+type WorkflowRecord = {
+  state: WorkflowState;
+  checkId: string;
+  title: string;
+  workloadName: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  assignedTo?: string;
+  dueDate?: string;
+  notes?: string;
+};
 type WorkflowRecords = Record<string, WorkflowRecord>;
 
 const LEGACY_STORAGE_KEY = 'tenantiq-workflow-state-v1';
@@ -68,8 +78,6 @@ async function readRecords(): Promise<WorkflowRecords> {
   if (!response.ok) throw new Error(payload?.detail || 'Unable to load TenantIQ workflow state.');
   const serverRecords = payload?.records && typeof payload.records === 'object' ? payload.records as WorkflowRecords : {};
   if (Object.keys(serverRecords).length) return serverRecords;
-
-  // One-time migration from the browser-only prototype into the licensed workspace.
   const legacy = readLegacyRecords();
   if (Object.keys(legacy).length) {
     await saveRecords(legacy);
@@ -157,20 +165,37 @@ export default function TenantIQWorkflow() {
     return () => { cancelled = true; };
   }, []);
 
-  async function setItemState(item: WorkflowItem, state: Exclude<WorkflowState, 'resolved'>) {
-    const key = itemKey(item);
-    const next = { ...records, [key]: { state, checkId: item.check_id || 'Finding', title: item.title || 'TenantIQ finding', workloadName: item.workloadName, updatedAt: new Date().toISOString() } };
+  async function persist(next: WorkflowRecords, previous: WorkflowRecords) {
     setRecords(next);
     setSaving(true);
     setError('');
     try {
       await saveRecords(next);
     } catch (err) {
-      setRecords(records);
+      setRecords(previous);
       setError(err instanceof Error ? err.message : 'Unable to save TenantIQ workflow state.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function baseRecord(item: WorkflowItem) {
+    const key = itemKey(item);
+    return records[key] || { state: 'needs_review' as WorkflowState, checkId: item.check_id || 'Finding', title: item.title || 'TenantIQ finding', workloadName: item.workloadName, updatedAt: new Date().toISOString() };
+  }
+
+  async function setItemState(item: WorkflowItem, state: Exclude<WorkflowState, 'resolved'>) {
+    const key = itemKey(item);
+    const previous = records;
+    const next = { ...records, [key]: { ...baseRecord(item), state, updatedAt: new Date().toISOString(), resolvedAt: undefined } };
+    await persist(next, previous);
+  }
+
+  async function updateMetadata(item: WorkflowItem, patch: Partial<Pick<WorkflowRecord, 'assignedTo' | 'dueDate' | 'notes'>>) {
+    const key = itemKey(item);
+    const previous = records;
+    const next = { ...records, [key]: { ...baseRecord(item), ...patch, updatedAt: new Date().toISOString() } };
+    await persist(next, previous);
   }
 
   const workloads = useMemo(() => ['ALL', ...Array.from(new Set(items.map(i => i.workloadName))).sort()], [items]);
@@ -226,10 +251,12 @@ export default function TenantIQWorkflow() {
     </div>
 
     {!filtered.length ? <div style={panelStyle}>No actionable findings match the current workflow filters.</div> : <div style={{ display: 'grid', gap: 10 }}>{filtered.map((item, index) => {
+      const key = itemKey(item);
       const id = `${item.assessmentId}-${item.check_id || index}`;
       const open = expanded === id;
       const status = String(item.status || 'WARNING').toUpperCase();
-      const state = records[itemKey(item)]?.state || 'needs_review';
+      const record = records[key] || baseRecord(item);
+      const state = record.state;
       const evidence = text(item.evidence) || 'No detailed evidence was supplied for this finding.';
       const recommendation = text(item.recommendation) || 'Review the associated TenantIQ guidance before making a configuration change.';
       const assessmentHref = `/assessments/${encodeURIComponent(item.assessmentId)}#${encodeURIComponent(item.check_id || '')}`;
@@ -238,11 +265,28 @@ export default function TenantIQWorkflow() {
       return <article key={id} style={{ ...panelStyle, padding: 0, overflow: 'hidden' }}>
         <button onClick={() => setExpanded(open ? null : id)} style={rowButtonStyle}>
           <div style={{ minWidth: 145 }}><div style={{ color: '#79baff', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.05em' }}>{item.workloadName}</div><div style={{ fontWeight: 900, marginTop: 4 }}>{item.check_id || 'Finding'}</div></div>
-          <div style={{ flex: '1 1 300px', textAlign: 'left' }}><div style={{ fontWeight: 800, color: '#edf5ff' }}>{item.title || 'TenantIQ finding'}</div><div style={{ fontSize: 11, color: '#758ba3', marginTop: 4 }}>{item.category || 'Assessment control'}</div></div>
+          <div style={{ flex: '1 1 300px', textAlign: 'left' }}><div style={{ fontWeight: 800, color: '#edf5ff' }}>{item.title || 'TenantIQ finding'}</div><div style={{ fontSize: 11, color: '#758ba3', marginTop: 4 }}>{item.category || 'Assessment control'}{record.assignedTo ? ` · ${record.assignedTo}` : ''}{record.dueDate ? ` · Due ${record.dueDate}` : ''}</div></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><WorkflowPill state={state} /><StatusPill status={status} />{item.severity && <span style={{ fontSize: 12, color: '#a4b4c6' }}>{item.severity}</span>}<span style={{ color: '#79baff', fontSize: 18 }}>{open ? '−' : '+'}</span></div>
         </button>
         {open && <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(86,160,255,.12)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16, paddingTop: 16 }}><Field label="Observed evidence" value={evidence} /><Field label="Recommended remediation" value={recommendation} /></div>
+
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 12, background: 'rgba(47,135,255,.045)', border: '1px solid rgba(86,160,255,.12)' }}>
+            <div style={{ fontSize: 11, fontWeight: 900, color: '#7fbaff', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Remediation management</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12 }}>
+              <label style={labelStyle}>Assigned to
+                <input disabled={saving} value={record.assignedTo || ''} onChange={e => setRecords({ ...records, [key]: { ...record, assignedTo: e.target.value } })} onBlur={e => updateMetadata(item, { assignedTo: e.target.value.trim() || undefined })} placeholder="Owner or team" style={inputStyle} />
+              </label>
+              <label style={labelStyle}>Due date
+                <input disabled={saving} type="date" value={record.dueDate || ''} onChange={e => setRecords({ ...records, [key]: { ...record, dueDate: e.target.value } })} onBlur={e => updateMetadata(item, { dueDate: e.target.value || undefined })} style={inputStyle} />
+              </label>
+            </div>
+            <label style={{ ...labelStyle, marginTop: 12 }}>Notes
+              <textarea disabled={saving} value={record.notes || ''} onChange={e => setRecords({ ...records, [key]: { ...record, notes: e.target.value } })} onBlur={e => updateMetadata(item, { notes: e.target.value.trim() || undefined })} placeholder="Add remediation notes, dependencies, change details, or validation context…" rows={4} style={{ ...inputStyle, resize: 'vertical', width: '100%' }} />
+            </label>
+            <div style={{ color: '#74899f', fontSize: 11, marginTop: 8 }}>Owner, due date, and notes are stored in this licensed TenantIQ workspace.</div>
+          </div>
+
           <div style={{ marginTop: 16, padding: 14, borderRadius: 12, background: 'rgba(47,135,255,.055)', border: '1px solid rgba(86,160,255,.12)' }}><div style={{ fontSize: 11, fontWeight: 900, color: '#7fbaff', textTransform: 'uppercase', letterSpacing: '.05em' }}>Workflow state</div><div style={{ fontSize: 13, color: '#b8c5d3', lineHeight: 1.6, marginTop: 5 }}>This state is stored in the licensed TenantIQ workspace and follows the customer across browsers and devices. Resolved remains assessment-verified only.</div></div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
             <button disabled={saving} onClick={() => setItemState(item, 'needs_review')} style={stateButton(state === 'needs_review')}>Needs review</button>
@@ -269,6 +313,8 @@ function stateButton(active: boolean): CSSProperties { return { border: `1px sol
 
 const panelStyle: CSSProperties = { border: '1px solid rgba(86,160,255,.18)', borderRadius: 16, background: 'rgba(8,22,40,.72)', padding: 18, color: '#dce7f4' };
 const selectStyle: CSSProperties = { border: '1px solid rgba(86,160,255,.22)', borderRadius: 10, background: '#081425', color: '#edf5ff', padding: '10px 12px', outline: 'none' };
+const inputStyle: CSSProperties = { display: 'block', width: '100%', marginTop: 6, border: '1px solid rgba(86,160,255,.22)', borderRadius: 9, background: '#071426', color: '#edf5ff', padding: '9px 10px', outline: 'none', boxSizing: 'border-box' };
+const labelStyle: CSSProperties = { color: '#9fb2c8', fontSize: 11, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.05em' };
 const rowButtonStyle: CSSProperties = { width: '100%', border: 0, background: 'transparent', color: 'inherit', padding: 18, display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', cursor: 'pointer', textAlign: 'left' };
 const primaryLinkStyle: CSSProperties = { display: 'inline-block', borderRadius: 10, padding: '10px 13px', background: '#2f87ff', color: '#fff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' };
 const secondaryLinkStyle: CSSProperties = { display: 'inline-block', borderRadius: 10, padding: '9px 12px', border: '1px solid rgba(86,160,255,.26)', color: '#8fc7ff', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' };

@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
 import TenantIQWorkflow from '../../components/TenantIQWorkflow';
-import TenantIQWorkflowFocus from '../../components/TenantIQWorkflowFocus';
 import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 
 export default async function WorkflowPage({
@@ -29,7 +28,13 @@ export default async function WorkflowPage({
           </p>
         </div>
         <TenantIQWorkflow initialFinding={initialFinding} />
-        <TenantIQWorkflowFocus finding={initialFinding} />
+        {initialFinding ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){var n=0;function f(){var e=document.getElementById('focused-remediation');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});return;}if(++n<40)setTimeout(f,125);}setTimeout(f,150);})();`,
+            }}
+          />
+        ) : null}
       </div>
     </main>
   );

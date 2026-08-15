@@ -3,10 +3,18 @@ import TenantIQAppNav from '../../components/TenantIQAppNav';
 import TenantIQWorkflow from '../../components/TenantIQWorkflow';
 import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 
-export default async function WorkflowPage() {
+export default async function WorkflowPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ finding?: string | string[] }>;
+}) {
   const { session, entitlement } = await requireTenantIQEntitlement();
   if (!session?.user?.id) redirect('/signin');
   if (!entitlement.entitled) redirect('/license-required');
+
+  const params = await searchParams;
+  const requestedFinding = Array.isArray(params.finding) ? params.finding[0] : params.finding;
+  const initialFinding = String(requestedFinding || '').trim().slice(0, 160);
 
   return (
     <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
@@ -19,7 +27,7 @@ export default async function WorkflowPage() {
             TenantIQ builds a prioritized remediation queue from the latest stored assessment for each workload. Review the evidence, use the recommendation, validate the change, and then re-run the assessment to confirm the finding is resolved.
           </p>
         </div>
-        <TenantIQWorkflow />
+        <TenantIQWorkflow initialFinding={initialFinding} />
       </div>
     </main>
   );

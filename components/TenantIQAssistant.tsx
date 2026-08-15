@@ -331,15 +331,23 @@ export default function TenantIQAssistant() {
           </div>)}
         </div> : null}
 
-        {loading ? <div style={{ marginBottom: 18, borderRadius: 14, border: '1px solid rgba(244,196,48,.24)', background: 'rgba(244,196,48,.07)', padding: 16, color: '#f4d35e' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 9, flexWrap: 'wrap' }}><strong>TenantIQ is analyzing the assessment…</strong><span style={{ fontSize: 13 }}>{progressPercent}% · {elapsed}s</span></div>
-          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: 'rgba(244,196,48,.12)' }}><div style={{ height: '100%', width: `${progressPercent}%`, background: 'linear-gradient(90deg,#f4c430,#ffd95a)', transition: 'width 600ms ease' }} /></div>
-          <div style={{ fontSize: 14, marginTop: 9 }}>{progressLabel(elapsed)}</div>
+        {loading ? <div role="dialog" aria-modal="true" aria-label="TenantIQ assessment analysis progress" style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(2,8,18,.68)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }}>
+          <div style={{ width: 'min(540px,calc(100vw - 40px))', borderRadius: 22, border: '1px solid rgba(110,181,255,.58)', background: 'linear-gradient(180deg,rgba(10,28,52,.98) 0%,rgba(7,20,38,.99) 100%)', padding: '30px 30px 28px', color: '#f3f7fc', boxShadow: '0 28px 90px rgba(0,0,0,.62), 0 0 0 1px rgba(47,135,255,.08)', textAlign: 'center' }}>
+            <div aria-hidden="true" style={{ width: 66, height: 66, margin: '0 auto 18px', borderRadius: '50%', border: '2px solid #4c9cff', display: 'grid', placeItems: 'center', color: '#b9d8ff', background: 'rgba(47,135,255,.10)', boxShadow: '0 0 32px rgba(47,135,255,.18)', fontSize: 30 }}>✦</div>
+            <strong style={{ display: 'block', fontSize: 20, lineHeight: 1.3, color: '#f7fbff' }}>TenantIQ is analyzing the assessment…</strong>
+            <div style={{ marginTop: 10, color: '#aebdce', fontSize: 14 }}>{progressLabel(elapsed)}</div>
+            <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: 'rgba(110,181,255,.16)', marginTop: 24 }}>
+              <div style={{ height: '100%', width: `${progressPercent}%`, borderRadius: 999, background: 'linear-gradient(90deg,#2f87ff,#6eb5ff)', boxShadow: '0 0 18px rgba(47,135,255,.45)', transition: 'width 600ms ease' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12, color: '#91a7bf', fontSize: 13 }}>
+              <span>{progressPercent}% complete</span><span aria-hidden="true">·</span><span>{elapsed}s</span>
+            </div>
+          </div>
         </div> : null}
 
         {error ? <div style={{ marginBottom: 18, borderRadius: 14, border: '1px solid rgba(255,90,90,.28)', background: 'rgba(255,70,70,.08)', padding: 16, color: '#ffaaaa' }}><strong>TenantIQ could not complete the request.</strong><div style={{ marginTop: 5 }}>{error}</div></div> : null}
 
-        <form onSubmit={submit} style={{ ...panelStyle, position: hasConversation ? 'sticky' : 'static', bottom: 18, boxShadow: '0 20px 60px rgba(0,0,0,.24)' }}>
+        <form onSubmit={submit} style={{ ...panelStyle, position: 'relative', zIndex: 1, boxShadow: '0 20px 60px rgba(0,0,0,.24)' }}>
           <label htmlFor="tenantiq-question" style={{ display: 'block', fontWeight: 800, marginBottom: 10 }}>{hasConversation ? 'Ask a follow-up' : 'Question'}</label>
           <textarea id="tenantiq-question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSubmit) event.currentTarget.form?.requestSubmit(); } }} rows={hasConversation ? 3 : 5} disabled={loading || uploading || !activeAssessmentId} placeholder={activeAssessmentId ? 'Ask about risks, findings, evidence, or remediation…' : 'Select or upload an assessment to begin…'} style={textareaStyle} />
           <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>

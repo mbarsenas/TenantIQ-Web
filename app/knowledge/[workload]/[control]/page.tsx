@@ -80,11 +80,14 @@ export default async function KnowledgeArticlePage({ params }: { params: Promise
 
           <section style={{ ...panel, display: 'flex', gap: 18, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <div>
-              <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase' }}>Use your tenant evidence</div>
-              <h2 style={{ margin: '8px 0 6px', fontSize: 23 }}>Ask TenantIQ about {control.id}</h2>
-              <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.55, fontSize: 14 }}>Open the AI Assistant and investigate {control.title} against the selected assessment.</p>
+              <div style={{ color: '#6eb5ff', fontSize: 11, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase' }}>Continue with tenant evidence</div>
+              <h2 style={{ margin: '8px 0 6px', fontSize: 23 }}>Take {control.id} into TenantIQ</h2>
+              <p style={{ margin: 0, color: '#9fb0c2', lineHeight: 1.55, fontSize: 14 }}>Use the AI Assistant for grounded analysis or open Workflow to assign, track, and validate remediation against the latest assessment.</p>
             </div>
-            <a href={`/assistant?finding=${encodeURIComponent(control.id)}`} style={{ display: 'inline-block', borderRadius: 10, padding: '12px 17px', background: '#2f87ff', color: '#fff', fontWeight: 900, textDecoration: 'none', whiteSpace: 'nowrap' }}>Ask about {control.title} →</a>
+            <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+              <a href={`/workflow?finding=${encodeURIComponent(control.id)}`} style={{ display: 'inline-block', borderRadius: 10, padding: '11px 15px', border: '1px solid rgba(86,160,255,.32)', color: '#9dcbff', fontWeight: 900, textDecoration: 'none', whiteSpace: 'nowrap' }}>Track remediation →</a>
+              <a href={`/assistant?finding=${encodeURIComponent(control.id)}`} style={{ display: 'inline-block', borderRadius: 10, padding: '12px 17px', background: '#2f87ff', color: '#fff', fontWeight: 900, textDecoration: 'none', whiteSpace: 'nowrap' }}>Ask AI Assistant →</a>
+            </div>
           </section>
         </div>
       </div>

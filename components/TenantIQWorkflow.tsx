@@ -1,5 +1,6 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 type AssessmentSummary = { assessment_id: string; source_name?: string | null; imported_at?: string | null; finding_count: number };
@@ -49,8 +50,8 @@ function Step({number,title,text:description,active=false}:{number:string;title:
 function Field({label,value}:{label:string;value:string}){return <div><div style={{color:'#7f93aa',fontSize:11,fontWeight:900,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:5}}>{label}</div><div style={{color:'#c6d3e2',lineHeight:1.6,fontSize:13,whiteSpace:'pre-wrap'}}>{value}</div></div>}
 function StatusPill({status}:{status:string}){const fail=status==='FAIL';return <span style={{borderRadius:999,padding:'4px 8px',background:fail?'rgba(255,90,90,.10)':'rgba(244,196,48,.09)',color:fail?'#ff9b9b':'#f4d35e',fontSize:10,fontWeight:900}}>{status}</span>}
 function Metric({label,value,tone='normal'}:{label:string;value:string;tone?:string}){const color=tone==='fail'?'#ff8f8f':tone==='warning'?'#f4d35e':'#f3f7fc';return <div style={{border:'1px solid rgba(86,160,255,.17)',borderRadius:14,background:'rgba(8,22,40,.66)',padding:15}}><div style={{color:'#8192a6',fontSize:10,fontWeight:900,textTransform:'uppercase',letterSpacing:'.06em'}}>{label}</div><div style={{color,fontSize:25,fontWeight:900,marginTop:6}}>{value}</div></div>}
-const panelStyle={border:'1px solid rgba(86,160,255,.18)',borderRadius:16,background:'rgba(8,22,40,.72)',padding:18,color:'#dce7f4'};
-const selectStyle={border:'1px solid rgba(86,160,255,.22)',borderRadius:10,background:'#081425',color:'#edf5ff',padding:'10px 12px',outline:'none'};
-const rowButtonStyle={width:'100%',border:0,background:'transparent',color:'inherit',padding:18,display:'flex',gap:18,alignItems:'center',flexWrap:'wrap',cursor:'pointer',textAlign:'left' as const};
-const primaryLinkStyle={display:'inline-block',borderRadius:10,padding:'10px 13px',background:'#2f87ff',color:'#fff',fontSize:12,fontWeight:850,textDecoration:'none',whiteSpace:'nowrap' as const};
-const secondaryLinkStyle={display:'inline-block',borderRadius:10,padding:'9px 12px',border:'1px solid rgba(86,160,255,.26)',color:'#8fc7ff',fontSize:12,fontWeight:850,textDecoration:'none',whiteSpace:'nowrap' as const};
+const panelStyle: CSSProperties={border:'1px solid rgba(86,160,255,.18)',borderRadius:16,background:'rgba(8,22,40,.72)',padding:18,color:'#dce7f4'};
+const selectStyle: CSSProperties={border:'1px solid rgba(86,160,255,.22)',borderRadius:10,background:'#081425',color:'#edf5ff',padding:'10px 12px',outline:'none'};
+const rowButtonStyle: CSSProperties={width:'100%',border:0,background:'transparent',color:'inherit',padding:18,display:'flex',gap:18,alignItems:'center',flexWrap:'wrap',cursor:'pointer',textAlign:'left'};
+const primaryLinkStyle: CSSProperties={display:'inline-block',borderRadius:10,padding:'10px 13px',background:'#2f87ff',color:'#fff',fontSize:12,fontWeight:850,textDecoration:'none',whiteSpace:'nowrap'};
+const secondaryLinkStyle: CSSProperties={display:'inline-block',borderRadius:10,padding:'9px 12px',border:'1px solid rgba(86,160,255,.26)',color:'#8fc7ff',fontSize:12,fontWeight:850,textDecoration:'none',whiteSpace:'nowrap'};

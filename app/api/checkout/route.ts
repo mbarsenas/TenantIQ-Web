@@ -2,12 +2,20 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-const PRICE_IDS = {
-  Essentials: 'price_1U3or32YGBL7nUyuQOFEOPNk',
-  Professional: 'price_1U3orF2YGBL7nUyu6snxDV4B',
+const PLANS = {
+  Essentials: {
+    unitAmount: 49900,
+    productName: 'TenantIQ Essentials',
+    description: 'TenantIQ Essentials annual subscription for 1 Microsoft 365 tenant.',
+  },
+  Professional: {
+    unitAmount: 99900,
+    productName: 'TenantIQ Professional',
+    description: 'TenantIQ Professional annual subscription for up to 5 Microsoft 365 tenants.',
+  },
 } as const;
 
-type Edition = keyof typeof PRICE_IDS;
+type Edition = keyof typeof PLANS;
 
 function getPublicOrigin(request: Request) {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -29,7 +37,7 @@ function getPublicOrigin(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const secretKey = process.env.STRIPE_SECRET_KEY;
+    const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
     if (!secretKey) {
       return NextResponse.json(
         { error: 'Stripe test checkout is not configured on this deployment yet.' },
@@ -39,17 +47,25 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const edition = String(body?.edition || '') as Edition;
-    const price = PRICE_IDS[edition];
+    const plan = PLANS[edition];
 
-    if (!price) {
+    if (!plan) {
       return NextResponse.json({ error: 'Invalid TenantIQ edition.' }, { status: 400 });
     }
 
     const origin = getPublicOrigin(request);
     const params = new URLSearchParams();
     params.set('mode', 'subscription');
-    params.set('line_items[0][price]', price);
+
+    // Build the recurring Stripe Price inline. This avoids stale or cross-sandbox
+    // hard-coded price IDs while keeping the annual TenantIQ pricing authoritative here.
+    params.set('line_items[0][price_data][currency]', 'usd');
+    params.set('line_items[0][price_data][unit_amount]', String(plan.unitAmount));
+    params.set('line_items[0][price_data][recurring][interval]', 'year');
+    params.set('line_items[0][price_data][product_data][name]', plan.productName);
+    params.set('line_items[0][price_data][product_data][description]', plan.description);
     params.set('line_items[0][quantity]', '1');
+
     params.set('success_url', `${origin}/pricing/success?session_id={CHECKOUT_SESSION_ID}`);
     params.set('cancel_url', `${origin}/pricing/cancel`);
     params.set('allow_promotion_codes', 'true');
@@ -72,7 +88,7 @@ export async function POST(request: Request) {
     params.set('subscription_data[metadata][edition]', edition);
     params.set('metadata[product]', 'TenantIQ');
     params.set('metadata[edition]', edition);
-    params.set('metadata[environment]', 'test');
+    params.set('metadata[environment]', secretKey.startsWith('sk_live_') ? 'live' : 'test');
 
     const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
@@ -87,16 +103,26 @@ export async function POST(request: Request) {
     const session = await stripeResponse.json();
 
     if (!stripeResponse.ok || !session?.url) {
-      console.error('[TenantIQ checkout] Stripe error:', session);
+      const stripeMessage = session?.error?.message || 'Unable to create Stripe Checkout session.';
+      const stripeCode = session?.error?.code || session?.error?.type || 'stripe_error';
+      console.error('[TenantIQ checkout] Stripe error:', {
+        status: stripeResponse.status,
+        code: stripeCode,
+        message: stripeMessage,
+        requestId: stripeResponse.headers.get('request-id'),
+      });
       return NextResponse.json(
-        { error: session?.error?.message || 'Unable to create Stripe Checkout session.' },
-        { status: 502 },
+        { error: stripeMessage, code: stripeCode },
+        { status: stripeResponse.status >= 400 && stripeResponse.status < 500 ? 400 : 502 },
       );
     }
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
     console.error('[TenantIQ checkout] route error:', error);
-    return NextResponse.json({ error: 'Unable to start checkout.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unable to start checkout.' },
+      { status: 500 },
+    );
   }
 }

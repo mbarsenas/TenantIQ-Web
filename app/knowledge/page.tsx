@@ -3,7 +3,14 @@ import TenantIQAppNav from '../../components/TenantIQAppNav';
 import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 import { knowledgeWorkloads } from '../../lib/knowledge-catalog';
 
-const workloadCards = [
+type WorkloadCard = {
+  name: string;
+  slug: string;
+  description: string;
+  explicitCount?: number;
+};
+
+const workloadCards: WorkloadCard[] = [
   { name: 'Entra ID', slug: 'entra', description: 'Identity, authentication, Conditional Access, applications, and governance guidance.', explicitCount: 8 },
   { name: 'Exchange Online', slug: 'exchange', description: 'Mail flow, authentication, transport, and messaging security guidance.', explicitCount: 10 },
   { name: 'SharePoint Online', slug: 'sharepoint', description: 'Sharing, governance, permissions, lifecycle, and collaboration controls.' },
@@ -12,10 +19,10 @@ const workloadCards = [
   { name: 'Intune', slug: 'intune', description: 'Device compliance, enrollment, configuration, application, endpoint, and Windows management guidance.' },
   { name: 'Defender', slug: 'defender', description: 'Email protection, endpoint security, identity protection, incidents, hunting, and response guidance.' },
   { name: 'Microsoft Purview', slug: 'purview', description: 'Audit, retention, information protection, DLP, records, eDiscovery, and compliance guidance.' },
-] as const;
+];
 
 function indexedCount(name: string, explicitCount?: number) {
-  if (explicitCount) return explicitCount;
+  if (explicitCount !== undefined) return explicitCount;
   return knowledgeWorkloads.find((item) => item.name === name)?.controls.length || 0;
 }
 

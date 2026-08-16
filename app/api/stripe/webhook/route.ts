@@ -141,6 +141,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid webhook payload.' }, { status: 400 });
   }
 
+  const liveCheckoutEnabled = process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED?.trim().toLowerCase() === 'true';
+  if (event?.livemode === true && !liveCheckoutEnabled) {
+    console.warn('[TenantIQ webhook] Live Stripe event blocked by release gate.', event?.id, event?.type);
+    return NextResponse.json({ error: 'TenantIQ live fulfillment is not enabled.' }, { status: 503 });
+  }
+
   if (event.type === 'checkout.session.completed') {
     let diagnosticStage = 'checkout_session_parse';
 

@@ -29,6 +29,8 @@ TENANTIQ_DELIVERY_FROM_EMAIL=TenantIQ <licenses@tenantiq365.com>
 
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_ESSENTIALS=
+STRIPE_PRICE_PROFESSIONAL=
 TENANTIQ_LIVE_CHECKOUT_ENABLED=false
 TENANTIQ_FULFILLMENT_API_KEY=
 
@@ -48,6 +50,8 @@ TENANTIQ_R2_BUCKET=tenantiq-deliveries
 `TENANTIQ_FULFILLMENT_API_KEY` is a separate high-entropy bearer secret used only by the trusted TenantIQ fulfillment worker when a licensed package has finished publishing to private R2 storage.
 
 `TENANTIQ_LIVE_CHECKOUT_ENABLED` is the production release gate. Keep it unset or `false` while live Stripe products, prices, webhook endpoints, and secrets are being configured. With a live Stripe key installed, `/api/checkout` and live webhook fulfillment remain blocked until this value is deliberately changed to `true`. The `/pricing` route must also remain disabled until the public launch decision.
+
+`STRIPE_PRICE_ESSENTIALS` and `STRIPE_PRICE_PROFESSIONAL` must contain the verified live recurring Price IDs. Live checkout refuses to create a session when either selected edition lacks a valid configured Price ID. Test mode continues to use isolated inline price data.
 
 `TENANTIQ_GITHUB_TOKEN` is used only by the verified Stripe webhook to dispatch the `TenantIQ Order Fulfillment` GitHub Actions workflow after a paid Checkout Session completes. Use a fine-grained GitHub token scoped to `mbarsenas/TenantIQ` with Actions read/write access and store it only in the deployed TenantIQ-Web environment.
 

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import TenantIQAppNav from '../../components/TenantIQAppNav';
 import TenantIQWorkflow from '../../components/TenantIQWorkflow';
+import TenantIQWorkflowStateUx from '../../components/TenantIQWorkflowStateUx';
 import { requireTenantIQEntitlement } from '../../lib/tenantiq-entitlement';
 
 export default async function WorkflowPage({
@@ -19,6 +20,7 @@ export default async function WorkflowPage({
   return (
     <main style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#07111f 0%,#0d1321 100%)', color: '#f3f6fb' }}>
       <TenantIQAppNav active="workflow" />
+      <TenantIQWorkflowStateUx />
       <div style={{ width: 'min(1120px,100%)', margin: '0 auto', padding: '40px 20px 72px' }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ color: '#6eb5ff', fontSize: 12, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>TenantIQ workflow</div>

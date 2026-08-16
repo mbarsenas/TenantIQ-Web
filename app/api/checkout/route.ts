@@ -45,6 +45,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const liveMode = secretKey.startsWith('sk_live_');
+    const liveCheckoutEnabled = process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED?.trim().toLowerCase() === 'true';
+    if (liveMode && !liveCheckoutEnabled) {
+      console.warn('[TenantIQ checkout] Live checkout request blocked by release gate.');
+      return NextResponse.json(
+        { error: 'TenantIQ live checkout is not available yet.' },
+        { status: 503 },
+      );
+    }
+
     const body = await request.json();
     const edition = String(body?.edition || '') as Edition;
     const plan = PLANS[edition];
@@ -88,7 +98,7 @@ export async function POST(request: Request) {
     params.set('subscription_data[metadata][edition]', edition);
     params.set('metadata[product]', 'TenantIQ');
     params.set('metadata[edition]', edition);
-    params.set('metadata[environment]', secretKey.startsWith('sk_live_') ? 'live' : 'test');
+    params.set('metadata[environment]', liveMode ? 'live' : 'test');
 
     const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',

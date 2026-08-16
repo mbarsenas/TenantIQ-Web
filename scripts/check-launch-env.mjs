@@ -46,6 +46,15 @@ if (siteUrl) {
 
 const stripeSecret = String(process.env.STRIPE_SECRET_KEY || '').trim();
 if (stripeSecret) {
+  const liveCheckoutEnabled = String(process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED || '').trim().toLowerCase() === 'true';
+  if (stripeSecret.startsWith('sk_live_') && !liveCheckoutEnabled) {
+    pass('Stripe live key is configured while public live checkout remains locked');
+  } else if (stripeSecret.startsWith('sk_live_')) {
+    pass('Stripe live checkout release gate is enabled');
+  } else {
+    pass('Stripe test-mode key is configured');
+  }
+
   try {
     const response = await fetch('https://api.stripe.com/v1/account', {
       headers: { Authorization: `Bearer ${stripeSecret}` },

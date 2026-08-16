@@ -142,6 +142,8 @@ export async function POST(request: Request) {
   }
 
   if (event.type === 'checkout.session.completed') {
+    let diagnosticStage = 'checkout_session_parse';
+
     try {
       const session = event.data?.object ?? {};
       const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null;
@@ -156,6 +158,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true, fulfillment: 'skipped' });
       }
 
+      diagnosticStage = 'stripe_subscription_lookup';
       const subscription = await stripeRequest(`subscriptions/${subscriptionId}`, secretKey);
       const previousEventId = subscription?.metadata?.tenantiq_fulfillment_event_id;
       const dispatchStatus = subscription?.metadata?.tenantiq_fulfillment_dispatch_status;
@@ -174,6 +177,8 @@ export async function POST(request: Request) {
         reviewParams.set('metadata[tenantiq_checkout_session_id]', session.id || '');
         reviewParams.set('metadata[tenantiq_customer_email]', customerEmail || '');
         reviewParams.set('metadata[tenantiq_payment_status]', session.payment_status || '');
+
+        diagnosticStage = 'stripe_subscription_domain_review_metadata';
         await stripeRequest(`subscriptions/${subscriptionId}`, secretKey, reviewParams);
 
         console.error('[TenantIQ fulfillment] Paid checkout did not contain a valid Microsoft 365 domain.', session.id);
@@ -194,6 +199,8 @@ export async function POST(request: Request) {
         subscriptionParams.set('metadata[tenantiq_customer_email]', customerEmail || '');
         subscriptionParams.set('metadata[tenantiq_payment_status]', session.payment_status || '');
         subscriptionParams.set('metadata[tenantiq_fulfillment_recorded_at]', new Date().toISOString());
+
+        diagnosticStage = 'stripe_subscription_metadata';
         await stripeRequest(`subscriptions/${subscriptionId}`, secretKey, subscriptionParams);
 
         const customerParams = new URLSearchParams();
@@ -205,10 +212,15 @@ export async function POST(request: Request) {
         customerParams.set('metadata[tenantiq_fulfillment_dispatch_status]', 'pending');
         customerParams.set('metadata[tenantiq_fulfillment_event_id]', event.id);
         if (customerEmail) customerParams.set('metadata[tenantiq_email]', customerEmail);
+
+        diagnosticStage = 'stripe_customer_metadata';
         await stripeRequest(`customers/${customerId}`, secretKey, customerParams);
       }
 
+      diagnosticStage = 'github_fulfillment_dispatch';
       await dispatchFulfillmentWorkflow(subscriptionId);
+
+      diagnosticStage = 'stripe_dispatch_status_update';
       await markDispatchComplete(subscriptionId, customerId, secretKey);
 
       const fulfillment = {
@@ -230,8 +242,17 @@ export async function POST(request: Request) {
       console.log('[TenantIQ fulfillment dispatched]', JSON.stringify(fulfillment));
       return NextResponse.json({ received: true, fulfillment: 'dispatched' });
     } catch (error) {
-      console.error('[TenantIQ fulfillment] Persistence/dispatch failed:', error);
-      return NextResponse.json({ error: 'Fulfillment persistence or dispatch failed.' }, { status: 500 });
+      console.error('[TenantIQ fulfillment] Persistence/dispatch failed:', {
+        stage: diagnosticStage,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json(
+        {
+          error: 'Fulfillment persistence or dispatch failed.',
+          stage: diagnosticStage,
+        },
+        { status: 500 },
+      );
     }
   }
 

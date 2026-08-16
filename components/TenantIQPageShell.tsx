@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import TenantIQLandingV2 from "./TenantIQLandingV2";
+import TenantIQPublicFooter from "./TenantIQPublicFooter";
 
 type PageMode = "home" | "product" | "details";
 
@@ -116,6 +117,7 @@ export default function TenantIQPageShell({ mode }: { mode: PageMode }) {
         ${mode === "details" ? `.hero-grid, #what, #coverage { display:none !important; }` : ""}
       `}</style>
       <TenantIQLandingV2 />
+      <TenantIQPublicFooter />
     </>
   );
 }

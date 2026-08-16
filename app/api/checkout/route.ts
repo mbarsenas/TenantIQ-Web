@@ -17,6 +17,14 @@ const PLANS = {
 
 type Edition = keyof typeof PLANS;
 
+function livePriceForEdition(edition: Edition) {
+  const value = edition === 'Essentials'
+    ? process.env.STRIPE_PRICE_ESSENTIALS
+    : process.env.STRIPE_PRICE_PROFESSIONAL;
+  const priceId = value?.trim() || '';
+  return /^price_[A-Za-z0-9]+$/.test(priceId) ? priceId : '';
+}
+
 function getPublicOrigin(request: Request) {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
@@ -67,13 +75,25 @@ export async function POST(request: Request) {
     const params = new URLSearchParams();
     params.set('mode', 'subscription');
 
-    // Build the recurring Stripe Price inline. This avoids stale or cross-sandbox
-    // hard-coded price IDs while keeping the annual TenantIQ pricing authoritative here.
-    params.set('line_items[0][price_data][currency]', 'usd');
-    params.set('line_items[0][price_data][unit_amount]', String(plan.unitAmount));
-    params.set('line_items[0][price_data][recurring][interval]', 'year');
-    params.set('line_items[0][price_data][product_data][name]', plan.productName);
-    params.set('line_items[0][price_data][product_data][description]', plan.description);
+    if (liveMode) {
+      const livePriceId = livePriceForEdition(edition);
+      if (!livePriceId) {
+        console.error(`[TenantIQ checkout] Live Stripe price is not configured for ${edition}.`);
+        return NextResponse.json(
+          { error: 'TenantIQ live pricing is not configured yet.' },
+          { status: 503 },
+        );
+      }
+      params.set('line_items[0][price]', livePriceId);
+    } else {
+      // Test mode intentionally uses inline prices so sandbox checkout remains isolated
+      // from live product and price identifiers.
+      params.set('line_items[0][price_data][currency]', 'usd');
+      params.set('line_items[0][price_data][unit_amount]', String(plan.unitAmount));
+      params.set('line_items[0][price_data][recurring][interval]', 'year');
+      params.set('line_items[0][price_data][product_data][name]', plan.productName);
+      params.set('line_items[0][price_data][product_data][description]', plan.description);
+    }
     params.set('line_items[0][quantity]', '1');
 
     params.set('success_url', `${origin}/pricing/success?session_id={CHECKOUT_SESSION_ID}`);

@@ -56,6 +56,14 @@ if (stripeSecret) {
     pass('Stripe test-mode key is configured');
   }
 
+  if (liveStripeKey) {
+    for (const name of ['STRIPE_PRICE_ESSENTIALS', 'STRIPE_PRICE_PROFESSIONAL']) {
+      const priceId = String(process.env[name] || '').trim();
+      if (/^price_[A-Za-z0-9]+$/.test(priceId)) pass(`${name} contains a Stripe Price ID`);
+      else fail(`${name} is missing or invalid for live checkout`);
+    }
+  }
+
   try {
     const response = await fetch('https://api.stripe.com/v1/account', {
       headers: { Authorization: `Bearer ${stripeSecret}` },

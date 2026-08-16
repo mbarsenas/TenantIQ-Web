@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "next start"
+    "start": "next start",
+    "check:launch": "node --env-file-if-exists=.env.local scripts/check-launch-env.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

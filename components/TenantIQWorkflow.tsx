@@ -352,9 +352,9 @@ export default function TenantIQWorkflow({ initialFinding = '' }: { initialFindi
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-              <button disabled={saving} onClick={() => setItemState(item, 'needs_review')} style={stateButton(state === 'needs_review')}>Needs review</button>
-              <button disabled={saving} onClick={() => setItemState(item, 'in_progress')} style={stateButton(state === 'in_progress')}>Mark in progress</button>
-              <button disabled={saving} onClick={() => setItemState(item, 'ready_to_validate')} style={stateButton(state === 'ready_to_validate')}>Ready to validate</button>
+              <button disabled={saving || state === 'needs_review'} onClick={() => setItemState(item, 'needs_review')} style={stateButton(state === 'needs_review')}>{state === 'needs_review' ? 'Current: Needs review' : 'Move to needs review'}</button>
+              <button disabled={saving || state === 'in_progress'} onClick={() => setItemState(item, 'in_progress')} style={stateButton(state === 'in_progress')}>{state === 'in_progress' ? 'Current: In progress' : 'Mark in progress'}</button>
+              <button disabled={saving || state === 'ready_to_validate'} onClick={() => setItemState(item, 'ready_to_validate')} style={stateButton(state === 'ready_to_validate')}>{state === 'ready_to_validate' ? 'Current: Ready to validate' : 'Ready to validate'}</button>
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -418,3 +418,4 @@ const labelStyle: CSSProperties = { display: 'grid', gap: 6, color: '#b5c4d4', f
 const inputStyle: CSSProperties = { boxSizing: 'border-box', border: '1px solid rgba(86,160,255,.20)', borderRadius: 9, background: '#071220', color: '#e9f2fb', padding: '10px 11px', font: 'inherit', outline: 'none' };
 const primaryLinkStyle: CSSProperties = { display: 'inline-block', borderRadius: 9, padding: '9px 12px', background: '#2f87ff', color: '#fff', fontSize: 12, fontWeight: 850, textDecoration: 'none' };
 const secondaryLinkStyle: CSSProperties = { display: 'inline-block', borderRadius: 9, padding: '8px 11px', border: '1px solid rgba(86,160,255,.24)', color: '#9dcbff', fontSize: 12, fontWeight: 850, textDecoration: 'none' };
+

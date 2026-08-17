@@ -37,13 +37,13 @@ function publicOrigin(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const expectedOrigin = publicOrigin(request);
   const session = await auth();
   const email = session?.user?.email?.trim().toLowerCase();
   if (!session?.user?.id || !email) {
-    return NextResponse.redirect(new URL('/signin', request.url), 303);
+    return NextResponse.redirect(new URL('/signin', expectedOrigin), 303);
   }
 
-  const expectedOrigin = publicOrigin(request);
   const requestOrigin = request.headers.get('origin')?.replace(/\/$/, '');
   if (requestOrigin && requestOrigin !== expectedOrigin) {
     return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });

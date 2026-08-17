@@ -2,7 +2,7 @@
 
 import { ShieldCheck, ExternalLink, FileText, Lock, Eye, ArrowLeft } from "lucide-react";
 
-const sampleReportPath = "https://raw.githubusercontent.com/mbarsenas/TenantIQ/main/public/TenantIQ-Sample-Assessment.pdf";
+const sampleReportPath = "/TenantIQ-Sample-Assessment.pdf";
 
 export default function DetailsPage() {
   return (
@@ -67,7 +67,7 @@ export default function DetailsPage() {
       <div className="details-wrap">
         <section className="details-hero"><div className="eyebrow">TenantIQ assessment output</div><h1>See what a TenantIQ finding looks like.</h1><p>The sample report is a sanitized example of the evidence, status, and recommendation structure TenantIQ produces during a Microsoft 365 assessment.</p></section>
         <section id="sample" className="sample-card" aria-labelledby="sample-title">
-          <div><h2 id="sample-title">Sample Assessment</h2><p>Open the sample PDF to review a sanitized TenantIQ assessment.</p><div className="sample-actions"><a className="sample-button primary" href={sampleReportPath} target="_blank" rel="noopener noreferrer"><FileText size={19}/> Open sample report <ExternalLink size={16}/></a><a className="sample-button secondary" href={sampleReportPath}>Download PDF</a></div></div>
+          <div><h2 id="sample-title">Sample Assessment</h2><p>Open the sample PDF to review a sanitized TenantIQ assessment.</p><div className="sample-actions"><a className="sample-button primary" href={sampleReportPath} target="_blank" rel="noopener noreferrer"><FileText size={19}/> Open sample report <ExternalLink size={16}/></a><a className="sample-button secondary" href={sampleReportPath} download="TenantIQ-Sample-Assessment.pdf">Download PDF</a></div></div>
           <div className="sample-preview"><div className="sample-preview-icon"><ShieldCheck size={27}/></div><strong>Sanitized Microsoft 365 assessment</strong><span>Evidence-backed findings, status classification, and actionable recommendations in a portable PDF.</span></div>
         </section>
         <section id="trust" className="trust-section" aria-labelledby="trust-title"><h2 id="trust-title">Security &amp; Trust</h2><div className="trust-grid"><div className="trust-card"><Eye size={24}/><h3>Read-only assessment</h3><p>TenantIQ is designed to inspect tenant configuration and evidence without applying configuration changes.</p></div><div className="trust-card"><Lock size={24}/><h3>Least-privilege approach</h3><p>Assessment access is scoped to the permissions required to retrieve supported Microsoft 365 configuration data.</p></div><div className="trust-card"><ShieldCheck size={24}/><h3>Evidence-backed findings</h3><p>Findings are tied to the configuration data returned by supported Microsoft 365 management surfaces.</p></div></div><a className="back-link" href="/"><ArrowLeft size={16}/> Back to TenantIQ</a></section>

@@ -18,7 +18,8 @@ const PLANS = {
 
 type Edition = keyof typeof PLANS;
 
-const LAUNCH_TEST_TOKEN_SHA256 = '03c2656051c0d034a67936ddb01814bf6c778f4b76532220c782372bf3da9580';
+// No active launch-test token. Rotate this one-way value only for an approved test window.
+const LAUNCH_TEST_TOKEN_SHA256 = '0f72ff12e1152f18993d1a803f9d438b13bf59cfca3b86e2d50945b442412122';
 
 function isAuthorizedLaunchTest(request: Request) {
   const urlToken = new URL(request.url).searchParams.get('launch_test')?.trim() || '';

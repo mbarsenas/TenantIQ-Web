@@ -37,5 +37,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  return <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}><body className="min-h-full flex flex-col">{children}</body></html>;
+  return <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}><head><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4250808865543637" crossOrigin="anonymous" /></head><body className="min-h-full flex flex-col">{children}</body></html>;
 }

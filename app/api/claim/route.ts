@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Claim service is not configured.' }, { status: 503 });
   }
 
-  let body: { token?: string };
+  let body: { token?: string; subscriptionId?: string };
   try {
     body = await request.json();
   } catch {
@@ -133,24 +133,41 @@ export async function POST(request: Request) {
   }
 
   const tokenHash = sha256(token);
-  const search = new URLSearchParams();
-  search.set('query', `metadata['tenantiq_claim_token_sha256']:'${tokenHash}'`);
-  search.set('limit', '2');
+  const subscriptionId = body.subscriptionId?.trim();
+
+  if (subscriptionId && !/^sub_[A-Za-z0-9]+$/.test(subscriptionId)) {
+    return NextResponse.json({ error: 'Invalid subscription reference.' }, { status: 400 });
+  }
 
   try {
-    const result = await stripeGet('subscriptions/search', secretKey, search);
-    const matches = Array.isArray(result?.data) ? result.data : [];
+    let subscription;
 
-    if (matches.length !== 1) {
-      return NextResponse.json({ error: 'Claim link is invalid or no longer active.' }, { status: 404 });
+    if (subscriptionId) {
+      // Direct retrieval is read-after-write consistent. Stripe's Search API is
+      // eventually consistent and can reject a valid link immediately after a
+      // new package is fulfilled.
+      subscription = await stripeGet(`subscriptions/${encodeURIComponent(subscriptionId)}`, secretKey);
+      if (subscription?.metadata?.tenantiq_claim_token_sha256 !== tokenHash) {
+        return NextResponse.json({ error: 'Claim link is invalid or no longer active.' }, { status: 404 });
+      }
+    } else {
+      // Backward compatibility for previously issued token-only claim links.
+      const search = new URLSearchParams();
+      search.set('query', `metadata['tenantiq_claim_token_sha256']:'${tokenHash}'`);
+      search.set('limit', '2');
+      const result = await stripeGet('subscriptions/search', secretKey, search);
+      const matches = Array.isArray(result?.data) ? result.data : [];
+
+      if (matches.length !== 1) {
+        return NextResponse.json({ error: 'Claim link is invalid or no longer active.' }, { status: 404 });
+      }
+      subscription = matches[0];
     }
-
-    const subscription = matches[0];
     const metadata = subscription.metadata ?? {};
     const expiryRaw = metadata.tenantiq_claim_expires_at;
     const expiry = expiryRaw ? new Date(expiryRaw) : null;
 
-    if (subscription.status !== 'active') {
+    if (!['active', 'trialing'].includes(subscription.status)) {
       return NextResponse.json({ error: 'The related TenantIQ subscription is not active.' }, { status: 403 });
     }
     if (metadata.tenantiq_fulfillment_status !== 'license_issued') {

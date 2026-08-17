@@ -6,7 +6,7 @@ export default function Page() {
   return (
     <>
       <style jsx global>{`
-        #top { min-height: 900px !important; padding-bottom: 320px !important; }
+        #top { min-height: 0 !important; padding-bottom: 0 !important; }
         #top .hero-grid { max-width: 1280px !important; gap: 58px !important; }
         .home-enhancements { height: 340px !important; }
         .home-enhancements-inner { width: min(1280px, calc(100% - 80px)) !important; }
@@ -25,8 +25,8 @@ export default function Page() {
         .workload-logo { width: 46px !important; height: 46px !important; display: flex !important; align-items: center !important; justify-content: center !important; transform: none !important; }
         .workload-logo svg { width: 46px !important; height: 46px !important; display: block !important; transform: none !important; }
         .workload-name { font-size: 12px !important; line-height: 1.15 !important; color: #f3f6fb !important; overflow: visible !important; max-width: none !important; }
-        @media (max-width:1100px){#top{min-height:980px!important;padding-bottom:420px!important}.home-enhancements{height:430px!important}.workload-strip{grid-template-columns:repeat(4,minmax(110px,1fr))!important;row-gap:20px!important}}
-        @media (max-width:620px){#top{min-height:1240px!important;padding-bottom:600px!important}.home-enhancements{height:610px!important}.home-enhancements-inner{width:calc(100% - 30px)!important}.trust-stat-row{width:100%!important}.workload-strip{grid-template-columns:repeat(2,minmax(110px,1fr))!important}}
+        @media (max-width:1100px){.home-enhancements{height:430px!important}.workload-strip{grid-template-columns:repeat(4,minmax(110px,1fr))!important;row-gap:20px!important}}
+        @media (max-width:620px){.home-enhancements{height:610px!important}.home-enhancements-inner{width:calc(100% - 30px)!important}.trust-stat-row{width:100%!important}.workload-strip{grid-template-columns:repeat(2,minmax(110px,1fr))!important}}
       `}</style>
       <TenantIQPageShell mode="home" />
     </>

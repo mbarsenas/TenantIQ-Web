@@ -18,7 +18,7 @@ const PLANS = {
 
 type Edition = keyof typeof PLANS;
 
-const LAUNCH_TEST_TOKEN_SHA256 = '3e7cd6f1d21b532ecfcbc2f327bba898b019f267baac679ebb9694cc39775311';
+const LAUNCH_TEST_TOKEN_SHA256 = '03c2656051c0d034a67936ddb01814bf6c778f4b76532220c782372bf3da9580';
 
 function isAuthorizedLaunchTest(request: Request) {
   const urlToken = new URL(request.url).searchParams.get('launch_test')?.trim() || '';

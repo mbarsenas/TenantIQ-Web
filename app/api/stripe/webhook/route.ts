@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
+import { TENANTIQ_PUBLIC_CHECKOUT_RELEASED } from '../../../../lib/tenantiq-checkout-release';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -141,8 +142,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid webhook payload.' }, { status: 400 });
   }
 
-  const checkoutGateValue = process.env.TENANTIQ_CHECKOUT_ENABLED ?? process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED;
-  const liveCheckoutEnabled = checkoutGateValue?.trim().toLowerCase() === 'true';
+  const liveCheckoutEnabled = TENANTIQ_PUBLIC_CHECKOUT_RELEASED;
   const launchTestEvent = event?.data?.object?.metadata?.tenantiq_launch_test === 'true';
   if (event?.livemode === true && !liveCheckoutEnabled && !launchTestEvent) {
     console.warn('[TenantIQ webhook] Live Stripe event blocked by release gate.', event?.id, event?.type);

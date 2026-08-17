@@ -26,7 +26,9 @@ export default function ClaimPage() {
   const [claim, setClaim] = useState<ClaimResult | null>(null);
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('token')?.trim();
+    const search = new URLSearchParams(window.location.search);
+    const token = search.get('token')?.trim();
+    const subscriptionId = search.get('subscription')?.trim();
     if (!token) {
       setError('This claim link is missing its secure token.');
       setLoading(false);
@@ -38,7 +40,7 @@ export default function ClaimPage() {
         const response = await fetch('/api/claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, subscriptionId }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to validate this claim.');

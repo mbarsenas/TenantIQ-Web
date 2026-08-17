@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
+import { TENANTIQ_PUBLIC_CHECKOUT_RELEASED } from '../../../lib/tenantiq-checkout-release';
 
 export const runtime = 'nodejs';
 
@@ -67,8 +68,7 @@ export async function POST(request: Request) {
     }
 
     const liveMode = /^(?:sk|rk)_live_/.test(secretKey);
-    const checkoutGateValue = process.env.TENANTIQ_CHECKOUT_ENABLED ?? process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED;
-    const liveCheckoutEnabled = checkoutGateValue?.trim().toLowerCase() === 'true';
+    const liveCheckoutEnabled = TENANTIQ_PUBLIC_CHECKOUT_RELEASED;
     const launchTestAuthorized = isAuthorizedLaunchTest(request);
     if (!liveCheckoutEnabled && !launchTestAuthorized) {
       console.warn('[TenantIQ checkout] Checkout request blocked by release gate.');

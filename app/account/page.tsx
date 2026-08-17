@@ -47,7 +47,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     redirect('/account?verification=sent');
   }
 
-  const errorMessage = params.error === 'match' ? 'The new passwords do not match.' : params.error === 'current' ? 'Your current password is incorrect.' : params.error === 'same' ? 'Choose a password different from your current password.' : params.error === 'weak' ? 'Use at least 12 characters for your new password.' : params.error ? 'TenantIQ could not complete that account change.' : null;
+  const errorMessage = params.error === 'match' ? 'The new passwords do not match.' : params.error === 'current' ? 'Your current password is incorrect.' : params.error === 'same' ? 'Choose a password different from your current password.' : params.error === 'weak' ? 'Use at least 12 characters for your new password.' : params.error === 'portal_customer' ? 'TenantIQ could not find a Stripe billing profile for this account.' : params.error === 'portal' ? 'TenantIQ could not open the secure billing portal. Please try again or contact support.' : params.error ? 'TenantIQ could not complete that account change.' : null;
   const purchaseEmail = user?.email || session.user.email || 'Not available';
   const workspaceAccess = entitlement.entitled ? 'Enabled' : 'Blocked';
   const subscriptionStatus = entitlement.entitled ? titleCase(entitlement.status || 'active') : statusForReason(entitlement.reason);
@@ -102,6 +102,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(86,160,255,.12)', color: '#748ba6', fontSize: 12, lineHeight: 1.6 }}>
                   Subscription ID: <span style={monoStyle}>{maskIdentifier(entitlement.subscriptionId)}</span>{entitlement.licenseId ? <> &nbsp;·&nbsp; License ID: <span style={monoStyle}>{maskIdentifier(entitlement.licenseId)}</span></> : null}
                 </div>
+                <form action="/api/stripe/customer-portal" method="post" style={{ marginTop: 16 }}>
+                  <button type="submit" style={secondaryButtonStyle}>Manage billing and subscription</button>
+                </form>
               </>
             ) : (
               <div style={{ marginTop: 16, border: '1px solid rgba(248,113,113,.18)', background: 'rgba(248,113,113,.06)', borderRadius: 10, padding: '14px', color: '#fca5a5', fontSize: 13, lineHeight: 1.55 }}>

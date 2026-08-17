@@ -88,6 +88,8 @@ export async function POST(request: Request) {
     const origin = getPublicOrigin(request);
     const params = new URLSearchParams();
     params.set('mode', 'subscription');
+    params.set('automatic_tax[enabled]', 'true');
+    params.set('integration_identifier', 'tenantiq_checkout_kqmdzvpa');
 
     if (liveMode) {
       const livePriceId = livePriceForEdition(edition);

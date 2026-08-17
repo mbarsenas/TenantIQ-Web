@@ -46,7 +46,8 @@ if (siteUrl) {
 
 const stripeSecret = String(process.env.STRIPE_SECRET_KEY || '').trim();
 if (stripeSecret) {
-  const liveCheckoutEnabled = String(process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED || '').trim().toLowerCase() === 'true';
+  const checkoutGateValue = process.env.TENANTIQ_CHECKOUT_ENABLED ?? process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED ?? '';
+  const liveCheckoutEnabled = String(checkoutGateValue).trim().toLowerCase() === 'true';
   const liveStripeKey = /^(?:sk|rk)_live_/.test(stripeSecret);
   if (liveStripeKey && !liveCheckoutEnabled) {
     pass('Stripe live key is configured while public live checkout remains locked');

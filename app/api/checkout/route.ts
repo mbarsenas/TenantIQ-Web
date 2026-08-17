@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     }
 
     const liveMode = /^(?:sk|rk)_live_/.test(secretKey);
-    const liveCheckoutEnabled = process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED?.trim().toLowerCase() === 'true';
+    const checkoutGateValue = process.env.TENANTIQ_CHECKOUT_ENABLED ?? process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED;
+    const liveCheckoutEnabled = checkoutGateValue?.trim().toLowerCase() === 'true';
     if (!liveCheckoutEnabled) {
       console.warn('[TenantIQ checkout] Checkout request blocked by release gate.');
       return NextResponse.json(

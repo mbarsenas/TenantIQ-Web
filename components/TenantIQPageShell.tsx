@@ -32,8 +32,10 @@ export default function TenantIQPageShell({ mode }: { mode: PageMode }) {
           };
         }
 
-        if (label === "Request early access") {
-          button.textContent = "View plans";
+        if (label === "Explore TenantIQ") {
+          button.onclick = () => {
+            window.location.href = "/product#what";
+          };
         }
       });
     };
@@ -49,6 +51,12 @@ export default function TenantIQPageShell({ mode }: { mode: PageMode }) {
       if (!button) return;
 
       const label = button.textContent?.trim();
+      if (label === "Explore TenantIQ") {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.href = "/product#what";
+      }
+
       if (label === "View plans" || label === "Request early access") {
         event.preventDefault();
         event.stopPropagation();
@@ -65,7 +73,7 @@ export default function TenantIQPageShell({ mode }: { mode: PageMode }) {
       <style>{`
         html, body { max-width: 100%; overflow-x: hidden; }
         ${mode === "home" ? `
-          #what, #coverage, #how, #sample, #trust, #audience, #early-access, footer { display: none !important; }
+          #what, #coverage, #how, #sample, #trust, #early-access { display: none !important; }
           #top { min-height: 100vh !important; overflow: hidden; background: radial-gradient(circle at 14% 18%, rgba(37,99,235,.12), transparent 26%), radial-gradient(circle at 76% 32%, rgba(76,141,255,.08), transparent 30%), linear-gradient(180deg,#07111f 0%,#0D1321 100%) !important; }
           #top .site-nav { max-width: 1320px !important; padding: 10px 48px !important; }
           #top .hero-grid { max-width: 1320px !important; min-height: 0 !important; align-items: start !important; grid-template-columns: 0.92fr 1.08fr !important; gap: 70px !important; padding: 18px 48px 8px !important; }

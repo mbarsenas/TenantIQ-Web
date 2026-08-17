@@ -21,7 +21,8 @@ type Edition = keyof typeof PLANS;
 const LAUNCH_TEST_TOKEN_SHA256 = '3e7cd6f1d21b532ecfcbc2f327bba898b019f267baac679ebb9694cc39775311';
 
 function isAuthorizedLaunchTest(request: Request) {
-  const token = request.headers.get('x-tenantiq-launch-test')?.trim() || '';
+  const urlToken = new URL(request.url).searchParams.get('launch_test')?.trim() || '';
+  const token = request.headers.get('x-tenantiq-launch-test')?.trim() || urlToken;
   if (!token) return false;
   const actual = Buffer.from(createHash('sha256').update(token, 'utf8').digest('hex'), 'hex');
   const expected = Buffer.from(LAUNCH_TEST_TOKEN_SHA256, 'hex');

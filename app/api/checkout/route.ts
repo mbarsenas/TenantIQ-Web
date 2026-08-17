@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -16,6 +17,16 @@ const PLANS = {
 } as const;
 
 type Edition = keyof typeof PLANS;
+
+const LAUNCH_TEST_TOKEN_SHA256 = '3e7cd6f1d21b532ecfcbc2f327bba898b019f267baac679ebb9694cc39775311';
+
+function isAuthorizedLaunchTest(request: Request) {
+  const token = request.headers.get('x-tenantiq-launch-test')?.trim() || '';
+  if (!token) return false;
+  const actual = Buffer.from(createHash('sha256').update(token, 'utf8').digest('hex'), 'hex');
+  const expected = Buffer.from(LAUNCH_TEST_TOKEN_SHA256, 'hex');
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 
 function livePriceForEdition(edition: Edition) {
   const value = edition === 'Essentials'
@@ -56,7 +67,8 @@ export async function POST(request: Request) {
     const liveMode = /^(?:sk|rk)_live_/.test(secretKey);
     const checkoutGateValue = process.env.TENANTIQ_CHECKOUT_ENABLED ?? process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED;
     const liveCheckoutEnabled = checkoutGateValue?.trim().toLowerCase() === 'true';
-    if (!liveCheckoutEnabled) {
+    const launchTestAuthorized = isAuthorizedLaunchTest(request);
+    if (!liveCheckoutEnabled && !launchTestAuthorized) {
       console.warn('[TenantIQ checkout] Checkout request blocked by release gate.');
       return NextResponse.json(
         { error: 'TenantIQ live checkout is not available yet.' },
@@ -120,6 +132,10 @@ export async function POST(request: Request) {
     params.set('metadata[product]', 'TenantIQ');
     params.set('metadata[edition]', edition);
     params.set('metadata[environment]', liveMode ? 'live' : 'test');
+    if (launchTestAuthorized) {
+      params.set('metadata[tenantiq_launch_test]', 'true');
+      params.set('subscription_data[metadata][tenantiq_launch_test]', 'true');
+    }
 
     const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',

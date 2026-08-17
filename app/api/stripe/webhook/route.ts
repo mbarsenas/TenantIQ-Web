@@ -143,7 +143,8 @@ export async function POST(request: Request) {
 
   const checkoutGateValue = process.env.TENANTIQ_CHECKOUT_ENABLED ?? process.env.TENANTIQ_LIVE_CHECKOUT_ENABLED;
   const liveCheckoutEnabled = checkoutGateValue?.trim().toLowerCase() === 'true';
-  if (event?.livemode === true && !liveCheckoutEnabled) {
+  const launchTestEvent = event?.data?.object?.metadata?.tenantiq_launch_test === 'true';
+  if (event?.livemode === true && !liveCheckoutEnabled && !launchTestEvent) {
     console.warn('[TenantIQ webhook] Live Stripe event blocked by release gate.', event?.id, event?.type);
     return NextResponse.json({ error: 'TenantIQ live fulfillment is not enabled.' }, { status: 503 });
   }
